@@ -104,7 +104,7 @@ def check_collision(players, food):
 
             dis = math.sqrt((playerX - foodX) ** 2 + (playerY - foodY) ** 2)
             if dis <= PLAYER_RADIUS + p["score"]:
-                p["score"] = p["score"] + 0.5
+                p["score"] = p["score"] + 1
                 food.remove(cell)
 
 
@@ -201,31 +201,23 @@ def threaded_client(conn, _id):
 
     current_id = _id
 
-    # recieve a name from the client
+    # Receive a name from the client
     data = conn.recv(16)
     name = data.decode("utf-8")
-    print("[LOG]", name, "connected to the server.")
-    try:
-        color = colors[current_id]
-    except:
-        color = (255, 255, 255)
+    print(f"[LOG]\t{current_id} {name} connected to the server.")
+
+    # Get random color
+    color = random.choice(colors)
 
     # Setup properties for each new player
-    color = colors[current_id]
     x, y = get_start_location(players)
-    players[current_id] = {
-        "x": x,
-        "y": y,
-        "color": color,
-        "score": 0,
-        "name": name,
-    }  # x, y color, score, name
+    players[current_id] = {"x": x, "y": y, "color": color, "score": 0, "name": name}
 
     # pickle data and send initial info to clients
     conn.send(str.encode(str(current_id)))
 
-    # server will recieve basic commands from client
-    # it will send back all of the other clients info
+    # Server will receive basic commands from client
+    # Server will send back all of the other clients info
     """
 	commands start with:
 	move
@@ -239,22 +231,22 @@ def threaded_client(conn, _id):
             # if the game time passes the round time the game will stop
             if game_time >= ROUND_TIME:
                 start = False
-            else:
-                if game_time // MASS_LOSS_TIME == nxt:
-                    nxt += 1
-                    release_mass(players)
-                    print(f"[GAME] {name}'s Mass depleting")
+            # else:
+            #     if game_time // MASS_LOSS_TIME == nxt:
+            #         nxt += 1
+            #         release_mass(players)
+            #         print(f"[GAME] {name}'s Mass depleting")
         try:
-            # Recieve data from client
+            # Receive data from client
             data = conn.recv(32)
 
             if not data:
                 break
 
             data = data.decode("utf-8")
-            # print("[DATA] Recieved", data, "from client id:", current_id)
+            # print("[DATA] Received", data, "from client id:", current_id)
 
-            # look for specific commands from recieved data
+            # look for specific commands from Received data
             if data.split(" ")[0] == "move":
                 split_data = data.split(" ")
                 x = int(split_data[1])
@@ -295,7 +287,7 @@ def threaded_client(conn, _id):
         time.sleep(0.001)
 
     # When user disconnects
-    print("[DISCONNECT] Name:", name, ", Client Id:", current_id, "disconnected")
+    print(f"[DISCONNECT] Name: {name}\tClient Id:{current_id} disconnected")
 
     connections -= 1
     del players[current_id]  # remove client information from players list

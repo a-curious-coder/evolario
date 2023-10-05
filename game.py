@@ -91,32 +91,32 @@ def redraw_window(players, foods, game_time, score):
     draw_foods(foods)
     draw_players()
     # Draw a line between the center of the player and the closest food to the player
-    for player in players:
-        p = players[player]
-        if len(foods) > 0:
-            closest_food = foods[0]
-            for food in foods:
-                if abs(food[0] - p["x"]) + abs(food[1] - p["y"]) < abs(
-                    closest_food[0] - p["x"]
-                ) + abs(closest_food[1] - p["y"]):
-                    closest_food = food
-            pygame.draw.line(
-                SCREEN,
-                (0, 255, 0),
-                (p["x"], p["y"]),
-                (closest_food[0], closest_food[1]),
-                1,
-            )
+    # for player in players:
+    #     p = players[player]
+    #     if len(foods) > 0:
+    #         closest_food = foods[0]
+    #         for food in foods:
+    #             if abs(food[0] - p["x"]) + abs(food[1] - p["y"]) < abs(
+    #                 closest_food[0] - p["x"]
+    #             ) + abs(closest_food[1] - p["y"]):
+    #                 closest_food = food
+    #         pygame.draw.line(
+    #             SCREEN,
+    #             (0, 255, 0),
+    #             (p["x"], p["y"]),
+    #             (closest_food[0], closest_food[1]),
+    #             1,
+    #         )
     # Draw circle of player's local vicinity
-    for player in players:
-        p = players[player]
-        pygame.draw.circle(
-            SCREEN,
-            (0, 0, 0),
-            (p["x"], p["y"]),
-            PLAYER_RADIUS + round(p["score"]) + 100,
-            1,
-        )
+    # for player in players:
+    #     p = players[player]
+    #     pygame.draw.circle(
+    #         SCREEN,
+    #         (0, 0, 0),
+    #         (p["x"], p["y"]),
+    #         PLAYER_RADIUS + round(p["score"]) + 100,
+    #         1,
+    #     )
     # draw scoreboard
     sort_players = list(reversed(sorted(players, key=lambda x: players[x]["score"])))
     title = TIME_FONT.render("Scoreboard", 1, (0, 0, 0))

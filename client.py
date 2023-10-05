@@ -13,7 +13,7 @@ class Client:
     def __init__(self):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.client.settimeout(10.0)
-        self.host = "10.15.172.196"
+        self.host = "169.254.255.194"
         self.port = 5555
         self.addr = (self.host, self.port)
 
