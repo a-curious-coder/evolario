@@ -23,7 +23,7 @@ NUM_PLAYERS = 10
 NUM_FOODS = 10
 CONFIG_FILE = "config-feedforward.txt"
 W, H = 1920, 1080
-
+FROZEN_PLAYERS = [NUM_PLAYERS * False]
 directions = [
     "up",
     "down",
@@ -58,7 +58,7 @@ def calculate_distance(x1, y1, x2, y2):
 def evaluate_genomes(genomes, config):
     global should_restart
     threads = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             executor.submit(evaluate_single_genome, genome_id, genome, config): (
                 genome_id,
@@ -97,10 +97,13 @@ def evaluate_single_genome(genome_id, genome, config):
 
     # setup the clock, limit to 30fps
     clock = pygame.time.Clock()
-
     game_running = True
-
+    movement_threshold = 4.9  # Change this value according to your game's scale
+    total_distance_travelled = 0
+    last_position = (players[current_id]["x"], players[current_id]["y"])
     while game_running:
+        distance_moved = 0
+        last_move_time = time.time()
         clock.tick(60)
         # Define an area of 20 radius around the player
         local_vicinity = 100
@@ -140,10 +143,17 @@ def evaluate_single_genome(genome_id, genome, config):
         else:
             players_data = players_data[:NUM_PLAYERS]
 
+        # Considering the local vicinity, normalize the data
+        for i in range(len(players_data)):
+            players_data[i] = players_data[i] / local_vicinity
+
         if len(foods_data) < NUM_FOODS:
             foods_data += [0] * (NUM_FOODS - len(foods_data))
         else:
             foods_data = foods_data[:NUM_FOODS]
+
+        for i in range(len(foods_data)):
+            foods_data[i] = foods_data[i] / local_vicinity
 
         # Create input data for the neural network
         input_data = (
@@ -154,7 +164,7 @@ def evaluate_single_genome(genome_id, genome, config):
         )
 
         player = players[current_id]
-        vel = 3 - round(player["score"] / 14)
+        vel = 5 - round(player["score"] / 14)
         if vel <= 1:
             vel = 1
 
@@ -163,12 +173,30 @@ def evaluate_single_genome(genome_id, genome, config):
         player = get_next_move(output, player, vel)
 
         x, y = players[current_id]["x"], players[current_id]["y"]
-        data = f"move {x} {y}"
-        # send data to server and recieve back all players information
-        foods, players, game_time = client.send(data)
-        if should_restart:
+        next_move = f"move {x} {y}"
+        # send next_move to server and recieve back all players information
+        foods, players, game_time = client.send(next_move)
+
+        if (players[current_id]["x"], players[current_id]["y"]) != last_position:
+            distance_moved += calculate_distance(
+                players[current_id]["x"], players[current_id]["y"], *last_position
+            )
+
+            if distance_moved > movement_threshold:
+                total_distance_travelled += distance_moved
+                last_position = (players[current_id]["x"], players[current_id]["y"])
+                last_move_time = time.time()
+        else:
+            pass
+
+        if time.time() - last_move_time >= 5 or should_restart:
+            print(
+                f"{name} : {total_distance_travelled} : {players[current_id]['score']}"
+            )
             # You can return a default fitness score or a penalty
-            return players[current_id]["score"]
+            return (players[current_id]["score"] / 100) + (
+                total_distance_travelled / 100
+            )
 
 
 def get_next_move(output, player, vel):
@@ -243,7 +271,7 @@ stats = neat.StatisticsReporter()
 population.add_reporter(stats)
 
 # Run the training for a certain number of generations
-winner = population.run(evaluate_genomes, 25)
+winner = population.run(evaluate_genomes, 10)
 
 # Test the AI's performance in the game
 # test_ai(winner)

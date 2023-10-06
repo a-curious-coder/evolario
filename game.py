@@ -4,6 +4,7 @@ with contextlib.redirect_stdout(None):
     import pygame
 
 import os
+import random
 
 from client import Client
 
@@ -26,7 +27,7 @@ NAME_FONT = pygame.font.SysFont("arial", 20)
 TIME_FONT = pygame.font.SysFont("arial", 30)
 SCORE_FONT = pygame.font.SysFont("arial", 22)
 
-COLORS = [
+COLOURS = [
     (255, 0, 0),
     (255, 128, 0),
     (255, 255, 0),
@@ -48,11 +49,6 @@ os.environ["SDL_VIDEO_CENTERED"] = "1"
 
 # setup pygame window
 SCREEN = pygame.display.set_mode((W, H))
-
-
-# Dynamic Variables
-players = {}
-foods = []
 
 
 # FUNCTIONS
@@ -79,44 +75,17 @@ def convert_time(t):
         return minutes + ":" + seconds
 
 
-def redraw_window(players, foods, game_time, score):
+def draw_window(player_manager, game_time, score):
     """
     draws each frame
     :return: None
     """
-    # Set background color
+    players = player_manager.get_all()
+    # Set background colour
     SCREEN.fill((255, 255, 255))
-
     draw_grid()
-    draw_foods(foods)
-    draw_players()
-    # Draw a line between the center of the player and the closest food to the player
-    # for player in players:
-    #     p = players[player]
-    #     if len(foods) > 0:
-    #         closest_food = foods[0]
-    #         for food in foods:
-    #             if abs(food[0] - p["x"]) + abs(food[1] - p["y"]) < abs(
-    #                 closest_food[0] - p["x"]
-    #             ) + abs(closest_food[1] - p["y"]):
-    #                 closest_food = food
-    #         pygame.draw.line(
-    #             SCREEN,
-    #             (0, 255, 0),
-    #             (p["x"], p["y"]),
-    #             (closest_food[0], closest_food[1]),
-    #             1,
-    #         )
-    # Draw circle of player's local vicinity
-    # for player in players:
-    #     p = players[player]
-    #     pygame.draw.circle(
-    #         SCREEN,
-    #         (0, 0, 0),
-    #         (p["x"], p["y"]),
-    #         PLAYER_RADIUS + round(p["score"]) + 100,
-    #         1,
-    #     )
+    # get players from player manager and sort them by score
+
     # draw scoreboard
     sort_players = list(reversed(sorted(players, key=lambda x: players[x]["score"])))
     title = TIME_FONT.render("Scoreboard", 1, (0, 0, 0))
@@ -130,9 +99,9 @@ def redraw_window(players, foods, game_time, score):
             str(count + 1) + ". " + str(players[i]["name"]), 1, (0, 0, 0)
         )
         if count == 0:
-            SCREEN.blit(text, (x, start_y + 1 * 25))
+            SCREEN.blit(text, (x, start_y + (1 * 25)))
         else:
-            SCREEN.blit(text, (x, start_y + count * 25))
+            SCREEN.blit(text, (x, start_y + (count * 25)))
 
     # draw time
     text = TIME_FONT.render("Time: " + convert_time(game_time), 1, (0, 0, 0))
@@ -158,79 +127,219 @@ def draw_grid():
         SCREEN.blit(vertical_line, (i - 1, 0))
 
 
-def draw_foods(foods):
-    # draw all the orbs/foods
-    for food in foods:
-        pygame.draw.circle(SCREEN, food[2], (food[0], food[1]), FOOD_RADIUS)
+class Position:
+    """The Position class holds the x and y coordinates of a player."""
 
-
-def draw_players():
-    # draw each player in the list
-    for player in sorted(players, key=lambda x: players[x]["score"]):
-        p = players[player]
-        pygame.draw.circle(
-            SCREEN, p["color"], (p["x"], p["y"]), PLAYER_RADIUS + round(p["score"])
-        )
-        # Draw border around player
-        pygame.draw.circle(
-            SCREEN,
-            (0, 0, 0),
-            (p["x"], p["y"]),
-            PLAYER_RADIUS + round(p["score"]),
-            2,
-        )
-        # render and draw name for each player
-        text = NAME_FONT.render(p["name"], 1, (0, 0, 0))
-        SCREEN.blit(
-            text, (p["x"] - text.get_width() / 2, p["y"] - text.get_height() / 2)
-        )
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
 
 class Player:
-    def __init__(self, name, x, y, score, color):
+    """
+    The Player class holds the information for a single player.
+    Each player has a name, position, score and colour.
+    """
+
+    def __init__(self, name, position, score):
+        """
+        Initialize a new Player instance.
+
+        Parameters:
+            name (str): The name of the player.
+            position (Position): The position of the player.
+            score (int): The score of the player.
+            colour (Tuple[int, int, int]): The colour of the player as an (R, G, B) tuple.
+        """
         self.name = name
-        self.x = x
-        self.y = y
+        self.position = position
         self.score = score
-        self.color = color
+        self.colour = random.choice(COLOURS)
+        self.vel = START_VEL
+
+    def move(self):
+        keys = pygame.key.get_pressed()
+        # movement based on key presses
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            if self.position.x - self.vel - PLAYER_RADIUS - self.score >= 0:
+                self.position.x = self.position.x - self.vel
+
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            if self.position.x + self.vel + PLAYER_RADIUS + self.score <= W:
+                self.position.x = self.position.x + self.vel
+
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            if self.position.y - self.vel - PLAYER_RADIUS - self.score >= 0:
+                self.position.y = self.position.y - self.vel
+
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if self.position.y + self.vel + PLAYER_RADIUS + self.score <= H:
+                self.position.y = self.position.y + self.vel
+
+    def update_speed(self, vel):
+        self.vel = vel
+
+    def get_x(self):
+        return self.position.x
+
+    def get_y(self):
+        return self.position.y
 
 
 class PlayerManager:
+    """
+    The PlayerManager class maintains the information of all players.
+    It supports operations such as adding, updating, removing players and delivering player information.
+    """
+
     def __init__(self):
+        """
+        Initializes a new PlayerManager instance.
+        """
         self.players = {}
 
-    def add_player(self, name, x, y, score, color):
-        self.players[name] = Player(name, x, y, score, color)
+    def add(self, name, position, score):
+        """
+        Adds a new Player instance to the players dictionary.
 
-    def update_player(self, name, x, y, score, color):
-        self.players[name].x = x
-        self.players[name].y = y
+        Parameters:
+            name (str): The name of the player.
+            x (int): The x-coordinate of the player.
+            y (int): The y-coordinate of the player.
+            score (int): The score of the player.
+        """
+        self.players[name] = Player(name, position, score)
+
+    def update(self, name, position, score, colour):
+        """
+        Updates the information of a specific player.
+
+        Parameters:
+            name (str): The name of the player.
+            x (int): The new x-coordinate of the player.
+            y (int): The new y-coordinate of the player.
+            score (int): The new score of the player.
+            colour (Tuple[int,int,int]): The new colour of the player as an (R, G, B) tuple.
+        """
+        self.players[name].position = position
         self.players[name].score = score
-        self.players[name].color = color
+        self.players[name].colour = colour
 
-    def remove_player(self, name):
+    def remove(self, name):
+        """
+        Removes a player from the players dictionary.
+
+        Parameters:
+            name (str): The name of the player to be removed.
+        """
         del self.players[name]
 
-    def get_players(self):
+    def get(self, name):
+        """
+        Fetches a specific player from the players dictionary.
+
+        Parameters:
+            name (str): The name of the player to be fetched.
+
+        Returns:
+            Player: The player instance with the specified name.
+        """
+        return self.players[name]
+
+    def get_all(self):
+        """
+        Fetches all the players.
+
+        Returns:
+            dict: A dictionary of all player instances.
+        """
         return self.players
 
-    def draw_players(self):
-        for player in self.players:
-            p = self.players[player]
-            pygame.draw.circle(
-                SCREEN, p.color, (p.x, p.y), PLAYER_RADIUS + round(p.score)
-            )
-            # Draw border around player
+    def draw(self):
+        """
+        Draw each player on the game screen with a circle representing the player and their name.
+        """
+        for _, player in self.players.items():
             pygame.draw.circle(
                 SCREEN,
-                (0, 0, 0),
-                (p.x, p.y),
-                PLAYER_RADIUS + round(p.score),
-                2,
+                player.colour,
+                (player.x, player.y),
+                PLAYER_RADIUS + round(player.score),
             )
-            # render and draw name for each player
-            text = NAME_FONT.render(p.name, 1, (0, 0, 0))
-            SCREEN.blit(text, (p.x - text.get_width() / 2, p.y - text.get_height() / 2))
+            player_name = NAME_FONT.render(player.name, 1, (0, 0, 0))
+            SCREEN.blit(
+                player_name,
+                (
+                    player.x - player_name.get_width() / 2,
+                    player.y - player_name.get_height() / 2,
+                ),
+            )
+
+
+class FoodCell:
+    """
+    The Food class represents a single piece of food in the game.
+    Each food has a position, as well as a colour.
+    """
+
+    def __init__(self, position, colour):
+        """
+        Initialize a new Food instance.
+
+        Parameters:
+            position (Position): The position of the food.
+            colour (Tuple[int, int, int]): The colour of the food as an (R, G, B) tuple.
+        """
+        self.position = position
+        self.colour = colour
+
+
+class FoodCellManager:
+    """
+    The FoodManager class encapsulates the management of multiple
+    pieces of Food in the game. It allows adding, removing,
+    fetching all food items and drawing them.
+    """
+
+    def __init__(self):
+        """
+        Initializes a new FoodManager instance.
+        """
+        self.food_cells = []
+
+    def add(self, position, colour):
+        """
+        Adds a new piece of Food to the FoodManager's list.
+
+        :param x: The x-coordinate of the new food
+        :param y: The y-coordinate of the new food
+        :param colour: The colour of the new food
+        """
+        self.food_cells.append(FoodCell(position, colour))
+
+    def remove(self, index):
+        """
+        Removes a piece of Food from the FoodManager's list
+        at the specified index.
+
+        :param index: The index in the list from which to remove the food
+        """
+        del self.food_cells[index]
+
+    def get_all(self):
+        """
+        Fetches all the pieces of Food managed by the FoodManager.
+
+        :return: The list of all food pieces
+        """
+        return self.food_cells
+
+    def draw(self):
+        """
+        Draws each piece of Food on the game screen.
+        """
+        for food in self.food_cells:
+            pygame.draw.circle(SCREEN, food.colour, (food.x, food.y), FOOD_RADIUS)
 
 
 def main(player_name):
@@ -241,49 +350,36 @@ def main(player_name):
     :param players: a list of dicts represting a player
     :return: None
     """
-    global players
+    player_manager = PlayerManager()
+    food_manager = FoodCellManager()
 
-    # start by connecting to the network
     client = Client()
-    current_id = client.connect(player_name)
-    foods, players, game_time = client.send("get")
-
-    # setup the clock, limit to 30fps
+    _id = client.connect(player_name)
+    food_manager.food_cells, player_manager.players, game_time = client.send("get")
     clock = pygame.time.Clock()
+    # Get current player
+    player = player_manager.get(_id)
 
     run = True
     while run:
-        clock.tick(60)  # 30 fps max
-        player = players[current_id]
-        vel = START_VEL - round(player["score"] / 14)
-        if vel <= 1:
-            vel = 1
+        # limit the game to 30 frames per second
+        clock.tick(30)
 
-        # get key presses
-        keys = pygame.key.get_pressed()
+        # Calculate velocity based on score
+        vel = max(START_VEL - round(player.score / 14), 1)
+        player.update_speed(vel)
 
-        data = ""
-        # movement based on key presses
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            if player["x"] - vel - PLAYER_RADIUS - player["score"] >= 0:
-                player["x"] = player["x"] - vel
+        # move player
+        player.move()
 
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            if player["x"] + vel + PLAYER_RADIUS + player["score"] <= W:
-                player["x"] = player["x"] + vel
+        # create data to send to server
+        data = "move " + str(player.get_x()) + " " + str(player.get_y())
 
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            if player["y"] - vel - PLAYER_RADIUS - player["score"] >= 0:
-                player["y"] = player["y"] - vel
+        # Send new data to server
+        client.send(data)
 
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            if player["y"] + vel + PLAYER_RADIUS + player["score"] <= H:
-                player["y"] = player["y"] + vel
-
-        data = "move " + str(player["x"]) + " " + str(player["y"])
-
-        # send data to server and recieve back all players information
-        foods, players, game_time = client.send(data)
+        # Get current information from server
+        food_manager.food_cells, player_manager.players, game_time = client.send("get")
 
         for event in pygame.event.get():
             # if user hits red x button close window
@@ -295,8 +391,11 @@ def main(player_name):
                 if event.key == pygame.K_ESCAPE:
                     run = False
 
-        # redraw window then update the frame
-        redraw_window(players, foods, game_time, player["score"])
+        # Draw game window
+        draw_window(player_manager, game_time, player.score)
+        player_manager.draw()
+        food_manager.draw()
+
         pygame.display.update()
 
     client.disconnect()
@@ -308,4 +407,4 @@ try:
     # start game
     main("Human")
 except KeyboardInterrupt as k:
-    print("Keyboard Interrupt")
+    print(k.__class__.__name__)

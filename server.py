@@ -4,6 +4,7 @@ main server script for running agar.io server
 can handle multiple/infinite connections on the same
 local network
 """
+import logging
 import math
 import random
 import socket
@@ -12,7 +13,14 @@ from _thread import *
 
 import _pickle as pickle
 
-# setup sockets
+from game import Food, Player, Position
+
+# Set up a basic logger
+logging.basicConfig(level=logging.INFO)
+# Define constants
+BUFFER_SIZE = 32
+
+# Setup sockets
 S = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 S.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
@@ -40,7 +48,11 @@ except socket.error as e:
 
 S.listen()  # listen for connections
 
-print(f"[SERVER] Server Started with local ip {SERVER_IP}")
+print(f"[SERVER] Local ip {SERVER_IP}")
+# Save IP to file
+with open("ip.txt", "w") as f:
+    f.write(SERVER_IP)
+
 
 # dynamic variables
 players = {}
@@ -65,12 +77,8 @@ colors = [
     (0, 0, 0),
 ]
 start = False
-stat_time = 0
+start_time = 0
 game_time = "Starting Soon"
-nxt = 1
-
-
-# FUNCTIONS
 
 
 def release_mass(players):
@@ -86,7 +94,7 @@ def release_mass(players):
             p["score"] = math.floor(p["score"] * 0.95)
 
 
-def check_collision(players, food):
+def check_collision_food(players, food):
     """
     checks if any of the player have collided with any of the food
 
@@ -108,7 +116,7 @@ def check_collision(players, food):
                 food.remove(cell)
 
 
-def player_collision(players):
+def check_collision_player(players):
     """
     checks for player collision and handles that collision
 
@@ -141,16 +149,14 @@ def player_collision(players):
                 )
 
 
-def create_food(food, n):
+def create_food(food_cells, n):
     """
-    creates orbs/food on the screen
+    Create food cells on the map
 
-    :param food: a list to add food/orbs to
-    :param n: the amount of food to make
-    :return: None
+    :param food: existing list of food cells
+    :param n: the number of food cells to create
     """
-    print("[GAME] Generating food")
-    for i in range(n):
+    for _ in range(n):
         while True:
             stop = True
             x = random.randrange(0, W)
@@ -163,13 +169,13 @@ def create_food(food, n):
             if stop:
                 break
 
-        food.append((x, y, random.choice(colors)))
+        food_cells.append((x, y, random.choice(colors)))
 
 
 def get_start_location(players):
     """
     picks a start location for a player based on other player
-    locations. It wiill ensure it does not spawn inside another player
+    locations. It will ensure it does not spawn inside another player
 
     :param players: dict
     :return: tuple (x,y)
@@ -186,135 +192,116 @@ def get_start_location(players):
                 break
         if stop:
             break
-    return (x, y)
+    return Position(x, y)
+
+
+def handle_move_command(data, current_id):
+    split_data = data.split(" ")
+    x = int(split_data[1])
+    y = int(split_data[2])
+    players[current_id]["x"] = x
+    players[current_id]["y"] = y
 
 
 def threaded_client(conn, _id):
     """
-    runs in a new thread for each player connected to the server
+    Runs in a new thread for each player connected to the server
 
     :param con: ip address of connection
     :param _id: int
     :return: None
     """
-    global connections, players, food, game_time, nxt, start
+    global connections, players, food, game_time, start
 
     current_id = _id
 
     # Receive a name from the client
     data = conn.recv(16)
     name = data.decode("utf-8")
-    print(f"[LOG]\t{current_id} {name} connected to the server.")
 
-    # Get random color
-    color = random.choice(colors)
+    print(f"[INFO] {name}\tconnected")
 
     # Setup properties for each new player
-    x, y = get_start_location(players)
-    players[current_id] = {"x": x, "y": y, "color": color, "score": 0, "name": name}
+    position = get_start_location(players)
+    players[current_id] = Player(name, position, 0)
 
     # pickle data and send initial info to clients
     conn.send(str.encode(str(current_id)))
 
-    # Server will receive basic commands from client
-    # Server will send back all of the other clients info
-    """
-	commands start with:
-	move
-	jump
-	get
-	id - returns id of client
-	"""
+    start_time = time.time()
     while True:
         if start:
             game_time = round(time.time() - start_time)
             # if the game time passes the round time the game will stop
             if game_time >= ROUND_TIME:
                 start = False
-            # else:
-            #     if game_time // MASS_LOSS_TIME == nxt:
-            #         nxt += 1
-            #         release_mass(players)
-            #         print(f"[GAME] {name}'s Mass depleting")
+
         try:
             # Receive data from client
-            data = conn.recv(32)
+            data = conn.recv(BUFFER_SIZE)
 
             if not data:
                 break
 
             data = data.decode("utf-8")
-            # print("[DATA] Received", data, "from client id:", current_id)
 
-            # look for specific commands from Received data
             if data.split(" ")[0] == "move":
-                split_data = data.split(" ")
-                x = int(split_data[1])
-                y = int(split_data[2])
-                players[current_id]["x"] = x
-                players[current_id]["y"] = y
+                handle_move_command(data, current_id)
 
-                # only check for collison if the game has started
-                if start:
-                    check_collision(players, food)
-                    player_collision(players)
+                check_collision_food(players, food)
+                check_collision_player(players)
 
                 # if the amount of food is less than 150 create more
                 if len(food) <= 250:
                     create_food(food, 1)
-                    print("[GAME] Generating more orbs")
-
+            elif data.split(" ")[0] == "get":
                 send_data = pickle.dumps((food, players, game_time))
-
-            elif data.split(" ")[0] == "id":
-                send_data = str.encode(
-                    str(current_id)
-                )  # if user requests id then send it
-
-            elif data.split(" ")[0] == "jump":
-                send_data = pickle.dumps((food, players, game_time))
-            else:
-                # any other command just send back list of players
-                send_data = pickle.dumps((food, players, game_time))
-
-            # send data back to clients
-            conn.send(send_data)
+                # send data back to clients
+                conn.send(send_data)
 
         except Exception as e:
             print(e)
             break  # if an exception has been reached disconnect client
 
-        time.sleep(0.001)
+        time.sleep(0.01)
 
     # When user disconnects
-    print(f"[DISCONNECT] Name: {name}\tClient Id:{current_id} disconnected")
+    print(f"[INFO] {name}\tdisconnected")
 
     connections -= 1
     del players[current_id]  # remove client information from players list
     conn.close()  # close connection
 
 
-# setup level with food
-create_food(food, random.randrange(200, 250))
+def main():
+    print("[SERVER] Waiting for connections")
+    print("[INFO] Setting up level")
+    global start, start_time, connections, _id
+    # Initialise the level with food
+    create_food(food, random.randrange(200, 250))
+    start = False
+    try:
+        # Keep looping to accept new connections
+        while True:
+            host, addr = S.accept()
+            # print("[INFO] Connected to:", addr)
 
-print("[GAME] Setting up level")
-print("[SERVER] Waiting for connections")
+            # start game when a client on the server computer connects
+            if addr[0] == SERVER_IP and not (start):
+                start = True
+                start_time = time.time()
+                print("[INFO] Game Started")
 
-# Keep looping to accept new connections
-while True:
-    host, addr = S.accept()
-    print("[CONNECTION] Connected to:", addr)
+            # increment connections start new thread then increment ids
+            connections += 1
+            start_new_thread(threaded_client, (host, _id))
+            _id += 1
 
-    # start game when a client on the server computer connects
-    if addr[0] == SERVER_IP and not (start):
-        start = True
-        start_time = time.time()
-        print("[STARTED] Game Started")
+        # when program ends
+        print("[SERVER] Server offline")
+    except KeyboardInterrupt as k:
+        print("Keyboard Interrupt")
 
-    # increment connections start new thread then increment ids
-    connections += 1
-    start_new_thread(threaded_client, (host, _id))
-    _id += 1
 
-# when program ends
-print("[SERVER] Server offline")
+if __name__ == "__main__":
+    main()
