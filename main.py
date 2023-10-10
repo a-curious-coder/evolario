@@ -10,7 +10,7 @@ import time
 
 import neat
 
-from client import Client
+from client.client import Client
 
 with contextlib.redirect_stdout(None):
     import pygame

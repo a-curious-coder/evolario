@@ -1,12 +1,16 @@
 import contextlib
 
+import hydra
+from omegaconf import DictConfig
+
 with contextlib.redirect_stdout(None):
     import pygame
 
 import os
-import random
 
-from client import Client
+from client.client import Client
+from common.food import FoodCellManager
+from common.player import PlayerManager
 
 pygame.font.init()
 # Set window to center of screen
@@ -23,7 +27,6 @@ GRIDLINE_SPACING = 40
 
 W, H = 1920, 1080
 
-NAME_FONT = pygame.font.SysFont("arial", 20)
 TIME_FONT = pygame.font.SysFont("arial", 30)
 SCORE_FONT = pygame.font.SysFont("arial", 22)
 
@@ -44,6 +47,7 @@ COLOURS = [
     (128, 128, 128),
     (0, 0, 0),
 ]
+
 # Make window start in center of screen
 os.environ["SDL_VIDEO_CENTERED"] = "1"
 
@@ -127,222 +131,8 @@ def draw_grid():
         SCREEN.blit(vertical_line, (i - 1, 0))
 
 
-class Position:
-    """The Position class holds the x and y coordinates of a player."""
-
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-
-class Player:
-    """
-    The Player class holds the information for a single player.
-    Each player has a name, position, score and colour.
-    """
-
-    def __init__(self, name, position, score):
-        """
-        Initialize a new Player instance.
-
-        Parameters:
-            name (str): The name of the player.
-            position (Position): The position of the player.
-            score (int): The score of the player.
-            colour (Tuple[int, int, int]): The colour of the player as an (R, G, B) tuple.
-        """
-        self.name = name
-        self.position = position
-        self.score = score
-        self.colour = random.choice(COLOURS)
-        self.vel = START_VEL
-
-    def move(self):
-        keys = pygame.key.get_pressed()
-        # movement based on key presses
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            if self.position.x - self.vel - PLAYER_RADIUS - self.score >= 0:
-                self.position.x = self.position.x - self.vel
-
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            if self.position.x + self.vel + PLAYER_RADIUS + self.score <= W:
-                self.position.x = self.position.x + self.vel
-
-        if keys[pygame.K_UP] or keys[pygame.K_w]:
-            if self.position.y - self.vel - PLAYER_RADIUS - self.score >= 0:
-                self.position.y = self.position.y - self.vel
-
-        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            if self.position.y + self.vel + PLAYER_RADIUS + self.score <= H:
-                self.position.y = self.position.y + self.vel
-
-    def update_speed(self, vel):
-        self.vel = vel
-
-    def get_x(self):
-        return self.position.x
-
-    def get_y(self):
-        return self.position.y
-
-
-class PlayerManager:
-    """
-    The PlayerManager class maintains the information of all players.
-    It supports operations such as adding, updating, removing players and delivering player information.
-    """
-
-    def __init__(self):
-        """
-        Initializes a new PlayerManager instance.
-        """
-        self.players = {}
-
-    def add(self, name, position, score):
-        """
-        Adds a new Player instance to the players dictionary.
-
-        Parameters:
-            name (str): The name of the player.
-            x (int): The x-coordinate of the player.
-            y (int): The y-coordinate of the player.
-            score (int): The score of the player.
-        """
-        self.players[name] = Player(name, position, score)
-
-    def update(self, name, position, score, colour):
-        """
-        Updates the information of a specific player.
-
-        Parameters:
-            name (str): The name of the player.
-            x (int): The new x-coordinate of the player.
-            y (int): The new y-coordinate of the player.
-            score (int): The new score of the player.
-            colour (Tuple[int,int,int]): The new colour of the player as an (R, G, B) tuple.
-        """
-        self.players[name].position = position
-        self.players[name].score = score
-        self.players[name].colour = colour
-
-    def remove(self, name):
-        """
-        Removes a player from the players dictionary.
-
-        Parameters:
-            name (str): The name of the player to be removed.
-        """
-        del self.players[name]
-
-    def get(self, name):
-        """
-        Fetches a specific player from the players dictionary.
-
-        Parameters:
-            name (str): The name of the player to be fetched.
-
-        Returns:
-            Player: The player instance with the specified name.
-        """
-        return self.players[name]
-
-    def get_all(self):
-        """
-        Fetches all the players.
-
-        Returns:
-            dict: A dictionary of all player instances.
-        """
-        return self.players
-
-    def draw(self):
-        """
-        Draw each player on the game screen with a circle representing the player and their name.
-        """
-        for _, player in self.players.items():
-            pygame.draw.circle(
-                SCREEN,
-                player.colour,
-                (player.x, player.y),
-                PLAYER_RADIUS + round(player.score),
-            )
-            player_name = NAME_FONT.render(player.name, 1, (0, 0, 0))
-            SCREEN.blit(
-                player_name,
-                (
-                    player.x - player_name.get_width() / 2,
-                    player.y - player_name.get_height() / 2,
-                ),
-            )
-
-
-class FoodCell:
-    """
-    The Food class represents a single piece of food in the game.
-    Each food has a position, as well as a colour.
-    """
-
-    def __init__(self, position, colour):
-        """
-        Initialize a new Food instance.
-
-        Parameters:
-            position (Position): The position of the food.
-            colour (Tuple[int, int, int]): The colour of the food as an (R, G, B) tuple.
-        """
-        self.position = position
-        self.colour = colour
-
-
-class FoodCellManager:
-    """
-    The FoodManager class encapsulates the management of multiple
-    pieces of Food in the game. It allows adding, removing,
-    fetching all food items and drawing them.
-    """
-
-    def __init__(self):
-        """
-        Initializes a new FoodManager instance.
-        """
-        self.food_cells = []
-
-    def add(self, position, colour):
-        """
-        Adds a new piece of Food to the FoodManager's list.
-
-        :param x: The x-coordinate of the new food
-        :param y: The y-coordinate of the new food
-        :param colour: The colour of the new food
-        """
-        self.food_cells.append(FoodCell(position, colour))
-
-    def remove(self, index):
-        """
-        Removes a piece of Food from the FoodManager's list
-        at the specified index.
-
-        :param index: The index in the list from which to remove the food
-        """
-        del self.food_cells[index]
-
-    def get_all(self):
-        """
-        Fetches all the pieces of Food managed by the FoodManager.
-
-        :return: The list of all food pieces
-        """
-        return self.food_cells
-
-    def draw(self):
-        """
-        Draws each piece of Food on the game screen.
-        """
-        for food in self.food_cells:
-            pygame.draw.circle(SCREEN, food.colour, (food.x, food.y), FOOD_RADIUS)
-
-
-def main(player_name):
+@hydra.main(version_base=None, config_path="config", config_name="config")
+def main(cfg: DictConfig):
     """
     function for running the game,
     includes the main loop of the game
@@ -350,8 +140,10 @@ def main(player_name):
     :param players: a list of dicts represting a player
     :return: None
     """
-    player_manager = PlayerManager()
-    food_manager = FoodCellManager()
+    print(os.getcwd())
+    player_name = "Human"
+    player_manager = PlayerManager(cfg.player)
+    food_manager = FoodCellManager(cfg.food)
 
     client = Client()
     _id = client.connect(player_name)
@@ -403,8 +195,5 @@ def main(player_name):
     quit()
 
 
-try:
-    # start game
-    main("Human")
-except KeyboardInterrupt as k:
-    print(k.__class__.__name__)
+if __name__ == "__main__":
+    main()

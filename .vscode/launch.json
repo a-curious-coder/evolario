@@ -8,7 +8,7 @@
             "name": "Server Client",
             "type": "python",
             "request": "launch",
-            "program": "server.py",
+            "program": "madness.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },

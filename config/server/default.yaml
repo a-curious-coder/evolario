@@ -1,0 +1,9 @@
+buffer_size: 32
+round_time: 6000
+mass_loss_time: 0
+gridline_spacing: 40
+transparency: 50
+gridline_thickness: 2
+w: 800
+h: 600
+port: 5555

@@ -1,0 +1,6 @@
+.vs/
+.vscode/
+.venv/
+__pycache__/
+outputs/
+*.json

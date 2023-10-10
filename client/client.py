@@ -1,3 +1,4 @@
+import os
 import socket
 
 import _pickle as pickle
@@ -12,6 +13,8 @@ class Client:
 
     def __init__(self):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print("Client created")
+        print(os.getcwd())
         # Read IP from file
         with open("ip.txt", "r") as f:
             self.host = f.read()

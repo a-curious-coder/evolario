@@ -1,0 +1,3 @@
+# conf/player/default.yaml
+start_velocity: 5
+player_radius: 10

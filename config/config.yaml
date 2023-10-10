@@ -1,0 +1,5 @@
+# conf/config.yaml
+defaults:
+  - player: default
+  - food: default
+  - server: default
