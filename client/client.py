@@ -12,9 +12,8 @@ class Client:
     """
 
     def __init__(self):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print("Client created")
-        print(os.getcwd())
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print("[INFO]\tClient created")
         # Read IP from file
         with open("ip.txt", "r") as f:
             self.host = f.read()
@@ -28,9 +27,9 @@ class Client:
         :param name: str
         :return: int reprsenting id
         """
-        self.client.connect(self.addr)
-        self.client.send(str.encode(name))
-        val = self.client.recv(8)
+        self.sock.connect(self.addr)
+        self.sock.send(str.encode(name))
+        val = self.sock.recv(1024)
         return int(val.decode())  # can be int because will be an int id
 
     def disconnect(self):
@@ -38,7 +37,7 @@ class Client:
         disconnects from the server
         :return: None
         """
-        self.client.close()
+        self.sock.close()
 
     def send(self, data, pick=False):
         """
@@ -50,10 +49,10 @@ class Client:
         """
         try:
             if pick:
-                self.client.send(pickle.dumps(data))
+                self.sock.send(pickle.dumps(data))
             else:
-                self.client.send(str.encode(data))
-            reply = self.client.recv(2048 * 4)
+                self.sock.send(str.encode(data))
+            reply = self.sock.recv(1024)
             try:
                 reply = pickle.loads(reply)
             except Exception as e:

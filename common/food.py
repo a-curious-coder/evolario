@@ -1,7 +1,9 @@
+import math
+
 import pygame
 from omegaconf import DictConfig
 
-from common.utilities import Position, random_rgb
+from common.utilities import Position, random_position, random_rgb
 
 
 class FoodCell:
@@ -18,14 +20,14 @@ class FoodCell:
             position (Position): The position of the food.
             colour (Tuple[int, int, int]): The colour of the food as an (R, G, B) tuple.
         """
-        self.size = cfg.food_radius
+        self.radius = cfg.food_radius
         self.position = position
         self.colour = random_rgb()
 
     def draw(self, screen):
         """Draws the food on the game screen as a circle."""
         pygame.draw.circle(
-            screen, self.colour, (self.position.x, self.position.y), self.size
+            screen, self.colour, (self.position.x, self.position.y), self.radius
         )
 
 
@@ -36,12 +38,14 @@ class FoodCellManager:
     fetching all food items and drawing them.
     """
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, player_manager):
         """
         Initializes a new FoodManager instance.
         """
         self.cfg = cfg
+        self.food_cfg = cfg.food
         self.food_cells = []
+        self.player_manager = player_manager
 
     def add(self, position):
         """
@@ -51,7 +55,7 @@ class FoodCellManager:
         :param y: The y-coordinate of the new food
         :param colour: The colour of the new food
         """
-        self.food_cells.append(FoodCell(self.cfg, position))
+        self.food_cells.append(FoodCell(self.food_cfg, position))
 
     def remove(self, index):
         """
@@ -70,16 +74,19 @@ class FoodCellManager:
         for _ in range(n):
             while True:
                 stop = True
-                x, y = random_position(self.cfg.w, self.cfg.h)
-                for player in self.players:
-                    p = self.players[player]
-                    dis = math.sqrt((x - p.position.x) ** 2 + (y - p.position.y) ** 2)
-                    if dis <= PLAYER_RADIUS + p["score"]:
+                position = random_position(self.cfg.w, self.cfg.h)
+                for player in self.player_manager.players.items():
+                    p = self.player_manager.players[player]
+                    dis = math.sqrt(
+                        (position.x - p.position.x) ** 2
+                        + (position.y - p.position.y) ** 2
+                    )
+                    if dis <= self.cfg.player.player_radius + p.radius:
                         stop = False
                 if stop:
                     break
 
-            self.food_cells.append((x, y, random.choice(colors)))
+            self.food_cells.append((position.x, position.y, random_rgb()))
 
     def get_all(self):
         """

@@ -48,18 +48,19 @@ class ServerLogic:
         :param food: a list of food
         :return: None
         """
-        for player in self.p_manager.players:
-            p = self.p_manager.players[player]
-            for cell in self.f_manager.food_cells:
-                f = self.f_manager.food_cells[cell]
-
-                dis = math.sqrt(
-                    (p.position.x - f.position.x) ** 2
-                    + (p.position.y - f.position.y) ** 2
-                )
-                if dis <= self.cfg.player.player_radius + p.score:
-                    self.p_manager.players[player].score += 1
-                    self.f_manager.remove(cell)
+        try:
+            for player in self.p_manager.players:
+                p = self.p_manager.players[player]
+                for cell in self.f_manager.food_cells:
+                    x = p.position.x - cell.position.x
+                    y = p.position.y - cell.position.y
+                    dis = math.sqrt(x**2 + y**2)
+                    if dis <= self.cfg.player.player_radius + p.score:
+                        self.p_manager.players[player].score += 1
+                        self.f_manager.remove(cell)
+        except Exception as e:
+            print(e)
+            input("Press enter to continue...")
 
     def player_collisions(self):
         """
@@ -68,38 +69,44 @@ class ServerLogic:
         :param players: dict
         :return: None
         """
-        sort_players = sorted(
-            self.p_manager.players, key=lambda x: self.p_manager.players[x].score
-        )
-        for x, player1 in enumerate(sort_players):
-            for player2 in sort_players[x + 1 :]:
-                p1x = self.p_manager.players[player1].position.x
-                p1y = self.p_manager.players[player1].position.y
+        try:
+            sort_players = sorted(
+                self.p_manager.players.items(),
+                key=lambda x: x[1].score,
+            )
+            if len(sort_players) > 1:
+                for player1 in sort_players:
+                    for player2 in sort_players:
+                        p1x = self.p_manager.players[player1].position.x
+                        p1y = self.p_manager.players[player1].position.y
 
-                p2x = self.p_manager.players[player2].position.x
-                p2y = self.p_manager.players[player2].position.y
+                        p2x = self.p_manager.players[player2].position.x
+                        p2y = self.p_manager.players[player2].position.y
 
-                dis = math.sqrt((p1x - p2x) ** 2 + (p1y - p2y) ** 2)
-                if (
-                    dis
-                    < self.p_manager.players[player2].score
-                    - self.p_manager.players[player1].score * 0.85
-                ):
-                    self.p_manager.players[player2].score = math.sqrt(
-                        self.p_manager.players[player2].score ** 2
-                        + self.p_manager.players[player1].score ** 2
-                    )  # adding areas instead of radii
-                    self.p_manager.players[player1].score = 0
-                    (
-                        self.p_manager.players[player1].position.x,
-                        self.p_manager.players[player1].position.y,
-                    ) = self.p_manager._get_start_location()
-                    print(
-                        f"[GAME] "
-                        + self.p_manager.players[player2].name
-                        + " ATE "
-                        + self.p_manager.players[player1].name
-                    )
+                        dis = math.sqrt((p1x - p2x) ** 2 + (p1y - p2y) ** 2)
+                        if (
+                            dis
+                            < self.p_manager.players[player2].score
+                            - self.p_manager.players[player1].score * 0.85
+                        ):
+                            self.p_manager.players[player2].score = math.sqrt(
+                                self.p_manager.players[player2].score ** 2
+                                + self.p_manager.players[player1].score ** 2
+                            )  # adding areas instead of radii
+                            self.p_manager.players[player1].score = 0
+                            (
+                                self.p_manager.players[player1].position.x,
+                                self.p_manager.players[player1].position.y,
+                            ) = self.p_manager._get_start_location()
+                            print(
+                                f"[GAME] "
+                                + self.p_manager.players[player2].name
+                                + " ATE "
+                                + self.p_manager.players[player1].name
+                            )
+        except Exception as e:
+            print(e)
+            input("Press enter to continue...")
 
     def create_food(self, n):
         """
@@ -130,8 +137,8 @@ class Server:
     def __init__(self, cfg: DictConfig):
         self.cfg = ServerConfig(cfg)
 
-        self.p_manager = PlayerManager(cfg.player)
-        self.f_manager = FoodCellManager(cfg.food)
+        self.p_manager = PlayerManager(cfg)
+        self.f_manager = FoodCellManager(cfg, self.p_manager)
         self.server_logic = ServerLogic(cfg, self.p_manager, self.f_manager)
         self.connections = 0
         self._id = 0
@@ -149,11 +156,11 @@ class Server:
 
     def listen_for_connections(self):
         self.cfg.socket.listen()
-        print(f"[SERVER] Local ip {self.cfg.hostname}")
+        print(f"[SERVER] Local ip {self.cfg.ip}")
 
     def save_ip(self):
         with open("ip.txt", "w", encoding="utf-8") as file:
-            file.write(self.cfg.hostname)
+            file.write(self.cfg.ip)
 
     def start_server(self):
         self.bind_server()
@@ -166,19 +173,20 @@ class Server:
 
         # Keep looping to accept new connections
         while True:
-            host, addr = self.cfg.socket.accept()
+            clientsocket, addr = self.cfg.socket.accept()
             if addr[0] == self.cfg.hostname and not self.start:
                 self.start = True
                 self.start_time = time.time()
                 print("[INFO] Game Started")
 
             self.connections += 1
-            start_new_thread(target=self.threaded_client, args=(host, self._id)).start()
+            # start_new_thread(self.threaded_client, args=(host, self._id)).start()
+            self.threaded_client(clientsocket, self._id)
             self._id += 1
 
         print("[SERVER] Server offline")
 
-    def threaded_client(self, conn, _id):
+    def threaded_client(self, clientsocket, _id):
         """
         Runs in a new thread for each player connected to the server
 
@@ -186,19 +194,19 @@ class Server:
         :param _id: int
         :return: None
         """
-        this_player_id = _id
+        player_id = _id
 
         # Receive a name from the client
-        name = conn.recv(16).decode("utf-8")
+        name = clientsocket.recv(16).decode("utf-8")
 
         print(f"[INFO] {name}\tconnected")
 
         # Setup properties for each new player
-        self.p_manager.add(name)
+        self.p_manager.add(player_id, name)
 
         # pickle data and send initial info to clients
-        conn.send(str.encode(str(this_player_id)))
-
+        clientsocket.send(str.encode(str(player_id)))
+        self.start = True
         while True:
             if self.start:
                 game_time = round(time.time() - self.start_time)
@@ -208,15 +216,15 @@ class Server:
 
             try:
                 # Receive data from client
-                data = conn.recv(self.cfg.buffer_size)
+                data = clientsocket.recv(self.cfg.buffer_size)
 
                 if not data:
-                    break
+                    continue
 
                 data = data.decode("utf-8")
 
                 if data.split(" ")[0] == "move":
-                    self.p_manager.handle_move_command(data, this_player_id)
+                    self.p_manager.handle_move_command(data, player_id)
 
                     self.server_logic.player_food_collision()
                     self.server_logic.player_collisions()
@@ -225,14 +233,16 @@ class Server:
                     if len(self.f_manager.food_cells) <= 250:
                         self.server_logic.create_food(1)
                 elif data.split(" ")[0] == "get":
-                    send_data = pickle.dumps(
-                        (self.f_manager.food_cells, self.p_manager.players, game_time)
+                    data_to_send = (
+                        self.f_manager.food_cells,
+                        self.p_manager.players,
+                        game_time,
                     )
-                    # send data back to clients
-                    conn.send(send_data)
+                    send_data = pickle.dumps(data_to_send)
+                    clientsocket.send(send_data)
 
             except Exception as e:
-                print(e)
+                print(f"[ERR]\t{e}")
                 break  # if an exception has been reached disconnect client
 
             time.sleep(0.01)
@@ -242,8 +252,8 @@ class Server:
 
         self.connections -= 1
         # remove client information from players list
-        self.p_manager.remove(this_player_id)
-        conn.close()  # close connection
+        self.p_manager.remove(player_id)
+        clientsocket.close()  # close connection
 
 
 # Set up a basic logger

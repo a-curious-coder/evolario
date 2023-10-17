@@ -2,6 +2,8 @@ import math
 import random
 
 import pygame
+
+pygame.font.init()
 from omegaconf import DictConfig
 
 from common.utilities import Position, random_rgb
@@ -13,7 +15,7 @@ class Player:
     Each player has a name, position, score and colour.
     """
 
-    def __init__(self, cfg: DictConfig, name, position):
+    def __init__(self, cfg: DictConfig, id, name, position):
         """
         Initialize a new Player instance.
 
@@ -25,12 +27,12 @@ class Player:
         """
         self.cfg = cfg
         self.score = 0
+        self.id = id
         self.name = name
         self.position = position
         self.colour = random_rgb()
         self.vel = self.cfg.start_velocity
         self.radius = self.cfg.player_radius
-        self.name_font = pygame.font.SysFont("arial", 20)
 
     def draw(self, screen):
         """Draws the player on the game screen with a circle representing the player and their name.
@@ -43,14 +45,6 @@ class Player:
             self.colour,
             (self.position.x, self.position.y),
             self.cfg.player_radius + round(self.score),
-        )
-        player_name = self.name_font.render(self.name, 1, (0, 0, 0))
-        screen.blit(
-            player_name,
-            (
-                self.position.x - player_name.get_width() / 2,
-                self.position.y - player_name.get_height() / 2,
-            ),
         )
 
     def move(self):
@@ -77,7 +71,7 @@ class Player:
             if pos <= self.cfg.height:
                 self.position.y = self.position.y + self.vel
 
-    def update_velocity(self, vel):
+    def update_speed(self, vel):
         """Updates the velocity of the player.
 
         Parameters:
@@ -105,9 +99,11 @@ class PlayerManager:
         Initializes a new PlayerManager instance.
         """
         self.cfg = cfg
+        self.player_config = cfg.player
         self.players: dict[str, Player] = {}
+        self.name_font = pygame.font.SysFont("arial", 20)
 
-    def add(self, name):
+    def add(self, player_id, name):
         """
         Adds a new Player instance to the players dictionary.
 
@@ -118,9 +114,9 @@ class PlayerManager:
             score (int): The score of the player.
         """
         position = self._get_start_location()
-        self.players[name] = Player(self.cfg, name, position)
+        self.players[player_id] = Player(self.player_config, player_id, name, position)
 
-    def update(self, name, position, score, colour):
+    def update(self, player_id, position, score, colour):
         """
         Updates the information of a specific player.
 
@@ -131,20 +127,20 @@ class PlayerManager:
             score (int): The new score of the player.
             colour (Tuple[int,int,int]): The new colour of the player as an (R, G, B) tuple.
         """
-        self.players[name].position = position
-        self.players[name].score = score
-        self.players[name].colour = colour
+        self.players[player_id].position = position
+        self.players[player_id].score = score
+        self.players[player_id].colour = colour
 
-    def remove(self, name):
+    def remove(self, player_id):
         """
         Removes a player from the players dictionary.
 
         Parameters:
             name (str): The name of the player to be removed.
         """
-        del self.players[name]
+        del self.players[player_id]
 
-    def get(self, name):
+    def get(self, player_id):
         """
         Fetches a specific player from the players dictionary.
 
@@ -154,7 +150,7 @@ class PlayerManager:
         Returns:
             Player: The player instance with the specified name.
         """
-        return self.players[name]
+        return self.players[player_id]
 
     def get_all(self):
         """
@@ -166,11 +162,15 @@ class PlayerManager:
         return self.players
 
     def handle_move_command(self, data, player_id):
-        split_data = data.split(" ")
-        x = int(split_data[1])
-        y = int(split_data[2])
-        self.players[player_id].position.x = x
-        self.players[player_id].position.y = y
+        try:
+            split_data = data.split(" ")
+            x = int(split_data[1])
+            y = int(split_data[2])
+            self.players[player_id].position.x = x
+            self.players[player_id].position.y = y
+        except Exception as e:
+            print(e)
+            input("Press enter to continue...")
 
     def _get_start_location(self):
         """
@@ -182,12 +182,12 @@ class PlayerManager:
         """
         while True:
             stop = True
-            x = random.randrange(0, self.cfg.w)
-            y = random.randrange(0, self.cfg.h)
+            x = random.randrange(0, self.cfg.server.w)
+            y = random.randrange(0, self.cfg.server.h)
             for player in self.players.items():
                 p = self.players[player]
                 dis = math.sqrt((x - p["x"]) ** 2 + (y - p["y"]) ** 2)
-                if dis <= self.cfg.player_radius + p["score"]:
+                if dis <= self.player_config.player_radius + p["score"]:
                     stop = False
                     break
             if stop:
@@ -200,3 +200,11 @@ class PlayerManager:
         """
         for _, player in self.players.items():
             player.draw(screen)
+            player_name = self.name_font.render(self.name, 1, (0, 0, 0))
+            screen.blit(
+                player_name,
+                (
+                    player.position.x - player_name.get_width() / 2,
+                    player.position.y - player_name.get_height() / 2,
+                ),
+            )

@@ -25,8 +25,9 @@ from common.utilities import random_position
 class ServerConfig:
     def __init__(self, cfg: DictConfig):
         self.cfg = cfg
-        self.host = self.cfg.host
-        self.port = self.cfg.port
+        self.host = socket.gethostname()
+        self.port = self.cfg.server.port
+        self.ip_address = socket.gethostbyname(self.host)
         self.buffer_size = self.cfg.buffer_size
         self.round_time = self.cfg.round_time * 1000
         self.w = self.cfg.w
@@ -135,8 +136,8 @@ class Server:
     def __init__(self, cfg: DictConfig):
         self.cfg = ServerConfig(cfg)
 
-        self.p_manager = PlayerManager(cfg.player)
-        self.f_manager = FoodCellManager(cfg.food)
+        self.p_manager = PlayerManager(cfg)
+        self.f_manager = FoodCellManager(cfg, self.p_manager)
         self.server_logic = ServerLogic(cfg, self.p_manager, self.f_manager)
         self.connections = 0
         self._id = 0
@@ -146,7 +147,7 @@ class Server:
 
     def bind_server(self):
         try:
-            self.cfg.socket.bind((self.cfg.host, self.cfg.port))
+            self.cfg.socket.bind((self.cfg.ip_address, self.cfg.port))
         except socket.error as e:
             print(str(e))
             print("[SERVER] Server could not start")
@@ -154,7 +155,7 @@ class Server:
 
     def listen_for_connections(self):
         self.cfg.socket.listen()
-        print(f"[SERVER] Local ip {self.cfg.host}")
+        print(f"[SERVER] Local ip {self.cfg.ip_address}")
 
     def save_ip(self):
         with open("ip.txt", "w", encoding="utf-8") as file:
@@ -191,7 +192,7 @@ class Server:
         :param _id: int
         :return: None
         """
-        this_player_id = _id
+        player_id = _id
 
         # Receive a name from the client
         name = conn.recv(16).decode("utf-8")
@@ -199,10 +200,10 @@ class Server:
         print(f"[INFO] {name}\tconnected")
 
         # Setup properties for each new player
-        self.p_manager.add(name)
+        self.p_manager.add(player_id, name)
 
         # pickle data and send initial info to clients
-        conn.send(str.encode(str(this_player_id)))
+        conn.send(str.encode(str(player_id)))
 
         while True:
             if self.start:
@@ -221,7 +222,7 @@ class Server:
                 data = data.decode("utf-8")
 
                 if data.split(" ")[0] == "move":
-                    self.p_manager.handle_move_command(data, this_player_id)
+                    self.p_manager.handle_move_command(data, player_id)
 
                     self.server_logic.player_food_collision()
                     self.server_logic.player_collisions()
@@ -247,7 +248,7 @@ class Server:
 
         self.connections -= 1
         # remove client information from players list
-        self.p_manager.remove(this_player_id)
+        self.p_manager.remove(player_id)
         conn.close()  # close connection
 
 
@@ -255,7 +256,7 @@ class Server:
 logging.basicConfig(level=logging.INFO)
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="config")
+@hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
     server = Server(cfg)
     server.start_server()

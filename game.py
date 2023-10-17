@@ -140,14 +140,18 @@ def main(cfg: DictConfig):
     :param players: a list of dicts represting a player
     :return: None
     """
-    print(os.getcwd())
     player_name = "Human"
-    player_manager = PlayerManager(cfg.player)
-    food_manager = FoodCellManager(cfg.food)
+    player_manager = PlayerManager(cfg)
+    food_manager = FoodCellManager(cfg, player_manager)
 
     client = Client()
     _id = client.connect(player_name)
-    food_manager.food_cells, player_manager.players, game_time = client.send("get")
+    response = client.send("get")
+    if isinstance(response, tuple) and len(response) == 3:
+        food_manager.food_cells, player_manager.players, game_time = response
+        print("[INFO]\tConnected to server")
+    else:
+        print("Error: Unexpected response from client.send('get')")
     clock = pygame.time.Clock()
     # Get current player
     player = player_manager.get(_id)
@@ -170,8 +174,10 @@ def main(cfg: DictConfig):
         # Send new data to server
         client.send(data)
 
+        data = "get"
         # Get current information from server
-        food_manager.food_cells, player_manager.players, game_time = client.send("get")
+        response = client.send(data)
+        food_manager.food_cells, player_manager.players, game_time = response
 
         for event in pygame.event.get():
             # if user hits red x button close window
@@ -185,8 +191,8 @@ def main(cfg: DictConfig):
 
         # Draw game window
         draw_window(player_manager, game_time, player.score)
-        player_manager.draw()
-        food_manager.draw()
+        player_manager.draw(SCREEN)
+        food_manager.draw(SCREEN)
 
         pygame.display.update()
 
