@@ -3,6 +3,8 @@ import socket
 
 import _pickle as pickle
 
+HEADERSIZE = 10
+
 
 class Client:
     """
@@ -52,12 +54,13 @@ class Client:
                 self.sock.send(pickle.dumps(data))
             else:
                 self.sock.send(str.encode(data))
-            reply = self.sock.recv(1024)
-            try:
-                reply = pickle.loads(reply)
-            except Exception as e:
-                print(e)
 
-            return reply
-        except socket.error as e:
-            print(e)
+            # Receive data from server
+            reply = self.sock.recv(200000)
+            reply = pickle.loads(reply)
+        except Exception as e:
+            # Print all debug information
+            print(f"Exception: {e}")
+            print(f"data: {data}")
+
+        return reply

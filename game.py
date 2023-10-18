@@ -91,7 +91,7 @@ def draw_window(player_manager, game_time, score):
     # get players from player manager and sort them by score
 
     # draw scoreboard
-    sort_players = list(reversed(sorted(players, key=lambda x: players[x]["score"])))
+    sort_players = list(reversed(sorted(players, key=lambda x: players[x].score)))
     title = TIME_FONT.render("Scoreboard", 1, (0, 0, 0))
     start_y = 25
     x = W - title.get_width() - 10
@@ -100,7 +100,7 @@ def draw_window(player_manager, game_time, score):
     ran = min(len(players), 3)
     for count, i in enumerate(sort_players[:ran]):
         text = SCORE_FONT.render(
-            str(count + 1) + ". " + str(players[i]["name"]), 1, (0, 0, 0)
+            str(count + 1) + ". " + str(players[i].name), 1, (0, 0, 0)
         )
         if count == 0:
             SCREEN.blit(text, (x, start_y + (1 * 25)))
@@ -147,10 +147,10 @@ def main(cfg: DictConfig):
     client = Client()
     _id = client.connect(player_name)
     response = client.send("get")
-    if isinstance(response, tuple) and len(response) == 3:
+    try:
         food_manager.food_cells, player_manager.players, game_time = response
         print("[INFO]\tConnected to server")
-    else:
+    except Exception:
         print("Error: Unexpected response from client.send('get')")
     clock = pygame.time.Clock()
     # Get current player
@@ -159,7 +159,7 @@ def main(cfg: DictConfig):
     run = True
     while run:
         # limit the game to 30 frames per second
-        clock.tick(30)
+        clock.tick(60)
 
         # Calculate velocity based on score
         vel = max(START_VEL - round(player.score / 14), 1)

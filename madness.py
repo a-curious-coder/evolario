@@ -51,16 +51,16 @@ class ServerLogic:
         try:
             for player in self.p_manager.players:
                 p = self.p_manager.players[player]
-                for cell in self.f_manager.food_cells:
+                for i, cell in enumerate(self.f_manager.food_cells):
                     x = p.position.x - cell.position.x
                     y = p.position.y - cell.position.y
                     dis = math.sqrt(x**2 + y**2)
-                    if dis <= self.cfg.player.player_radius + p.score:
+                    if dis <= self.cfg.player.radius + p.score:
                         self.p_manager.players[player].score += 1
-                        self.f_manager.remove(cell)
+                        self.f_manager.remove(i)
         except Exception as e:
             print(e)
-            input("Press enter to continue...")
+            input("player_food_collision...")
 
     def player_collisions(self):
         """
@@ -106,7 +106,7 @@ class ServerLogic:
                             )
         except Exception as e:
             print(e)
-            input("Press enter to continue...")
+            input("player_player_collision...")
 
     def create_food(self, n):
         """
@@ -115,30 +115,33 @@ class ServerLogic:
         :param food: existing list of food cells
         :param n: the number of food cells to create
         """
-        for _ in range(n):
-            while True:
-                stop = True
-                position = random_position(self.cfg.server.w, self.cfg.server.h)
-                for player in self.p_manager.players.items():
-                    p = self.p_manager.players[player]
-                    dis = math.sqrt(
-                        (position.x - p.position.x) ** 2
-                        + (position.y - p.position.y) ** 2
-                    )
-                    if dis <= self.cfg.player.player_radius + p["score"]:
-                        stop = False
-                if stop:
-                    break
+        try:
+            for _ in range(n):
+                while True:
+                    stop = True
+                    position = random_position(self.cfg.server.w, self.cfg.server.h)
+                    for player in self.p_manager.players.values():
+                        dis = math.sqrt(
+                            (position.x - player.position.x) ** 2
+                            + (position.y - player.position.y) ** 2
+                        )
+                        if dis <= self.cfg.player.radius + player.score:
+                            stop = False
+                    if stop:
+                        break
 
-            self.f_manager.add(position)
+                self.f_manager.add(position)
+        except Exception as e:
+            print(e)
+            input("create_food...")
 
 
 class Server:
     def __init__(self, cfg: DictConfig):
-        self.cfg = ServerConfig(cfg)
-
+        self.cfg = cfg
         self.p_manager = PlayerManager(cfg)
         self.f_manager = FoodCellManager(cfg, self.p_manager)
+        self.server_config = ServerConfig(cfg)
         self.server_logic = ServerLogic(cfg, self.p_manager, self.f_manager)
         self.connections = 0
         self._id = 0
@@ -148,19 +151,21 @@ class Server:
 
     def bind_server(self):
         try:
-            self.cfg.socket.bind((self.cfg.hostname, self.cfg.port))
+            self.server_config.socket.bind(
+                (self.server_config.hostname, self.server_config.port)
+            )
         except socket.error as e:
             print(str(e))
             print("[SERVER] Server could not start")
             quit()
 
     def listen_for_connections(self):
-        self.cfg.socket.listen()
-        print(f"[SERVER] Local ip {self.cfg.ip}")
+        self.server_config.socket.listen()
+        print(f"[SERVER] Local ip {self.server_config.ip}")
 
     def save_ip(self):
         with open("ip.txt", "w", encoding="utf-8") as file:
-            file.write(self.cfg.ip)
+            file.write(self.server_config.ip)
 
     def start_server(self):
         self.bind_server()
@@ -169,12 +174,12 @@ class Server:
 
         print("[SERVER] Waiting for connections")
         print("[INFO] Setting up level")
-        self.server_logic.create_food(random.randrange(200, 250))
+        self.server_logic.create_food(self.cfg.food_quantity)
 
         # Keep looping to accept new connections
         while True:
-            clientsocket, addr = self.cfg.socket.accept()
-            if addr[0] == self.cfg.hostname and not self.start:
+            clientsocket, addr = self.server_config.socket.accept()
+            if addr[0] == self.server_config.hostname and not self.start:
                 self.start = True
                 self.start_time = time.time()
                 print("[INFO] Game Started")
@@ -211,12 +216,12 @@ class Server:
             if self.start:
                 game_time = round(time.time() - self.start_time)
                 # if the game time passes the round time the game will stop
-                if game_time >= self.cfg.round_time:
+                if game_time >= self.server_config.round_time:
                     self.start = False
 
             try:
                 # Receive data from client
-                data = clientsocket.recv(self.cfg.buffer_size)
+                data = clientsocket.recv(self.server_config.buffer_size)
 
                 if not data:
                     continue
@@ -230,8 +235,15 @@ class Server:
                     self.server_logic.player_collisions()
 
                     # if the amount of food is less than 150 create more
-                    if len(self.f_manager.food_cells) <= 250:
+                    if len(self.f_manager.food_cells) <= self.cfg.food_quantity:
                         self.server_logic.create_food(1)
+                    data_to_send = (
+                        self.f_manager.food_cells,
+                        self.p_manager.players,
+                        game_time,
+                    )
+                    send_data = pickle.dumps(data_to_send)
+                    clientsocket.send(send_data)
                 elif data.split(" ")[0] == "get":
                     data_to_send = (
                         self.f_manager.food_cells,

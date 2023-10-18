@@ -26,13 +26,14 @@ class Player:
             colour (Tuple[int, int, int]): The colour of the player as an (R, G, B) tuple.
         """
         self.cfg = cfg
+        self.player_config = cfg.player
         self.score = 0
         self.id = id
         self.name = name
         self.position = position
         self.colour = random_rgb()
-        self.vel = self.cfg.start_velocity
-        self.radius = self.cfg.player_radius
+        self.vel = self.player_config.start_velocity
+        self.radius = self.player_config.radius
 
     def draw(self, screen):
         """Draws the player on the game screen with a circle representing the player and their name.
@@ -44,7 +45,7 @@ class Player:
             screen,
             self.colour,
             (self.position.x, self.position.y),
-            self.cfg.player_radius + round(self.score),
+            self.player_config.radius + round(self.score),
         )
 
     def move(self):
@@ -52,22 +53,22 @@ class Player:
         keys = pygame.key.get_pressed()
         # movement based on key presses
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            pos = self.position.x - self.vel - self.cfg.player_radius - self.score
+            pos = self.position.x - self.vel - self.player_config.radius - self.score
             if pos >= 0:
                 self.position.x = self.position.x - self.vel
 
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            pos = self.position.x + self.vel + self.cfg.player_radius + self.score
+            pos = self.position.x + self.vel + self.player_config.radius + self.score
             if pos <= self.cfg.width:
                 self.position.x = self.position.x + self.vel
 
         if keys[pygame.K_UP] or keys[pygame.K_w]:
-            pos = self.position.y - self.vel - self.cfg.player_radius - self.score
+            pos = self.position.y - self.vel - self.player_config.radius - self.score
             if pos >= 0:
                 self.position.y = self.position.y - self.vel
 
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
-            pos = self.position.y + self.vel + self.cfg.player_radius + self.score
+            pos = self.position.y + self.vel + self.player_config.radius + self.score
             if pos <= self.cfg.height:
                 self.position.y = self.position.y + self.vel
 
@@ -114,7 +115,7 @@ class PlayerManager:
             score (int): The score of the player.
         """
         position = self._get_start_location()
-        self.players[player_id] = Player(self.player_config, player_id, name, position)
+        self.players[player_id] = Player(self.cfg, player_id, name, position)
 
     def update(self, player_id, position, score, colour):
         """
@@ -200,7 +201,7 @@ class PlayerManager:
         """
         for _, player in self.players.items():
             player.draw(screen)
-            player_name = self.name_font.render(self.name, 1, (0, 0, 0))
+            player_name = self.name_font.render(player.name, 1, (0, 0, 0))
             screen.blit(
                 player_name,
                 (
