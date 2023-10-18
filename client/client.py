@@ -3,8 +3,6 @@ import socket
 
 import _pickle as pickle
 
-HEADERSIZE = 10
-
 
 class Client:
     """

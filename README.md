@@ -2,17 +2,17 @@
 A much simpler cloned variant of the game AGAR.IO to be played by AI agents. This game was created for the purpose of testing the effectiveness of various AI algorithms.
 
 # Running on Local Network
-Before you will be able to run this game you must make one minor change the to the file **client.py**. The *host* property from inside the __init__() method must be the local ip address of the machine that is running the server. To find this IP all you need to do is run *server.py* and read the output to see what IP it is on. Simply use that as the host property for the client.py file.
+Create a virtual environment, install the requirements and then run the server.py in root directory. After it's running, run the client.py in the root directory. The client.py will connect to the server and start the game.
 
 # Playing the Game
 To run the game you must have an instance of *server.py* running. You can then connect as many clients as you'd like by running *game.py*.
 
 # Game Mechanics
-- Each game lasts 5 minutes
 - The larger you are the slower you move
-- Each player will lose mass at a rate proportional to their size (larger = faster loss)
-- The game will be in "lobby" mode until started, this means all each player can do is move.
-- The game will begin once a client connects on the same machine the server is running on
+- Eat food to grow
+- Eat other players to grow faster
+- If you are smaller than another player you will be eaten
+- If you are larger than another player you will eat them
 
-# Possible Erros
-If you are having connections issues try diabsling the firewall on the server and client machines. 
+# Possible Errors
+If you are having connections issues try disabling the firewall on the server and client machines. 
