@@ -1,5 +1,5 @@
-# Agar-IO
-A duplication of the game Agar.io written in python
+# Evolario
+A much simpler cloned variant of the game AGAR.IO to be played by AI agents. This game was created for the purpose of testing the effectiveness of various AI algorithms.
 
 # Running on Local Network
 Before you will be able to run this game you must make one minor change the to the file **client.py**. The *host* property from inside the __init__() method must be the local ip address of the machine that is running the server. To find this IP all you need to do is run *server.py* and read the output to see what IP it is on. Simply use that as the host property for the client.py file.

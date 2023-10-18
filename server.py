@@ -10,6 +10,7 @@ from _thread import start_new_thread
 import _pickle as pickle
 import hydra
 from omegaconf import DictConfig
+from scipy.spatial import cKDTree
 
 from common.food import FoodCellManager
 from common.player import PlayerManager
@@ -62,6 +63,50 @@ class ServerLogic:
             print(e)
             input("player_food_collision...")
 
+    # def player_collisions(self):
+    #     """
+    #     checks for player collision and handles that collision
+
+    #     :param players: dict
+    #     :return: None
+    #     """
+    #     players = self.p_manager.get_all()  # Returns a dict of all player objects
+    #     try:
+    #         if len(players) > 1:
+    #             for player1_key in players:
+    #                 for player2_key in players:
+    #                     if (
+    #                         player1_key != player2_key
+    #                     ):  # Make sure we're not comparing a player to itself
+    #                         player1 = players[player1_key]
+    #                         player2 = players[player2_key]
+
+    #                         p1x = player1.position.x
+    #                         p1y = player1.position.y
+
+    #                         p2x = player2.position.x
+    #                         p2y = player2.position.y
+
+    #                         dis = math.sqrt((p1x - p2x) ** 2 + (p1y - p2y) ** 2)
+    #                         if dis < player2.score - player1.score * 0.85:
+    #                             self.p_manager.players[player2_key].score = math.sqrt(
+    #                                 player2.score**2 + player1.score**2
+    #                             )  # adding areas instead of radii
+    #                             self.p_manager.players[player1_key].score = 0
+    #                             (
+    #                                 self.p_manager.players[player1_key].position.x,
+    #                                 self.p_manager.players[player1_key].position.y,
+    #                             ) = self.p_manager._get_start_location()
+    #                             print(
+    #                                 f"[GAME] "
+    #                                 + self.p_manager.players[player2_key].name
+    #                                 + " ATE "
+    #                                 + self.p_manager.players[player1_key].name
+    #                             )
+    #     except Exception as e:
+    #         print(e)
+    #         input("player_player_collision...")
+
     def player_collisions(self):
         """
         checks for player collision and handles that collision
@@ -70,40 +115,51 @@ class ServerLogic:
         :return: None
         """
         try:
-            sort_players = sorted(
-                self.p_manager.players.items(),
-                key=lambda x: x[1].score,
-            )
-            if len(sort_players) > 1:
-                for player1 in sort_players:
-                    for player2 in sort_players:
-                        p1x = self.p_manager.players[player1].position.x
-                        p1y = self.p_manager.players[player1].position.y
+            players = self.p_manager.get_all()  # Returns a dict of all player objects
+            if len(players) > 1:
+                # Create a tree from the player positions
+                tree = cKDTree(
+                    [
+                        (player.position.x, player.position.y)
+                        for player in players.values()
+                    ]
+                )
 
-                        p2x = self.p_manager.players[player2].position.x
-                        p2y = self.p_manager.players[player2].position.y
-
-                        dis = math.sqrt((p1x - p2x) ** 2 + (p1y - p2y) ** 2)
+                for player1_key in players:
+                    # Find all players close to player1
+                    close_players = tree.query_ball_point(
+                        [
+                            players[player1_key].position.x,
+                            players[player1_key].position.y,
+                        ],
+                        0.85,
+                    )
+                    for player2_key in close_players:
                         if (
-                            dis
-                            < self.p_manager.players[player2].score
-                            - self.p_manager.players[player1].score * 0.85
-                        ):
-                            self.p_manager.players[player2].score = math.sqrt(
-                                self.p_manager.players[player2].score ** 2
-                                + self.p_manager.players[player1].score ** 2
-                            )  # adding areas instead of radii
-                            self.p_manager.players[player1].score = 0
-                            (
-                                self.p_manager.players[player1].position.x,
-                                self.p_manager.players[player1].position.y,
-                            ) = self.p_manager._get_start_location()
-                            print(
-                                f"[GAME] "
-                                + self.p_manager.players[player2].name
-                                + " ATE "
-                                + self.p_manager.players[player1].name
+                            player1_key != player2_key
+                        ):  # Make sure we're not comparing a player to itself
+                            player1 = players[player1_key]
+                            player2 = players[player2_key]
+
+                            dis = math.sqrt(
+                                (player1.position.x - player2.position.x) ** 2
+                                + (player1.position.y - player2.position.y) ** 2
                             )
+                            if dis < player2.score - player1.score * 0.85:
+                                self.p_manager.players[player2_key].score = math.sqrt(
+                                    player2.score**2 + player1.score**2
+                                )  # adding areas instead of radii
+                                self.p_manager.players[player1_key].score = 0
+                                (
+                                    self.p_manager.players[player1_key].position.x,
+                                    self.p_manager.players[player1_key].position.y,
+                                ) = self.p_manager._get_start_location()
+                                print(
+                                    f"[GAME] "
+                                    + self.p_manager.players[player2_key].name
+                                    + " ATE "
+                                    + self.p_manager.players[player1_key].name
+                                )
         except Exception as e:
             print(e)
             input("player_player_collision...")
@@ -185,8 +241,8 @@ class Server:
                 print("[INFO] Game Started")
 
             self.connections += 1
-            # start_new_thread(self.threaded_client, args=(host, self._id)).start()
-            self.threaded_client(clientsocket, self._id)
+            start_new_thread(self.threaded_client, args=(clientsocket, self._id))
+            # self.threaded_client(clientsocket, self._id)
             self._id += 1
 
         print("[SERVER] Server offline")
@@ -231,27 +287,17 @@ class Server:
                 if data.split(" ")[0] == "move":
                     self.p_manager.handle_move_command(data, player_id)
 
-                    self.server_logic.player_food_collision()
-                    self.server_logic.player_collisions()
+                    # self.server_logic.player_food_collision()
+                    # self.server_logic.player_collisions()
 
                     # if the amount of food is less than 150 create more
                     if len(self.f_manager.food_cells) <= self.cfg.food_quantity:
                         self.server_logic.create_food(1)
-                    data_to_send = (
-                        self.f_manager.food_cells,
-                        self.p_manager.players,
-                        game_time,
-                    )
-                    send_data = pickle.dumps(data_to_send)
-                    clientsocket.send(send_data)
                 elif data.split(" ")[0] == "get":
-                    data_to_send = (
-                        self.f_manager.food_cells,
-                        self.p_manager.players,
-                        game_time,
-                    )
-                    send_data = pickle.dumps(data_to_send)
-                    clientsocket.send(send_data)
+                    pass
+                data_to_send = (self.f_manager.food_cells, self.p_manager.players)
+                send_data = pickle.dumps(data_to_send)
+                clientsocket.send(send_data)
 
             except Exception as e:
                 print(f"[ERR]\t{e}")
@@ -278,5 +324,7 @@ def main(cfg: DictConfig) -> None:
     server.start_server()
 
 
+import cProfile
+
 if __name__ == "__main__":
-    main()
+    cProfile.run("main()")

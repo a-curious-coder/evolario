@@ -56,7 +56,7 @@ class Client:
                 self.sock.send(str.encode(data))
 
             # Receive data from server
-            reply = self.sock.recv(200000)
+            reply = self.sock.recv(20000)
             reply = pickle.loads(reply)
         except Exception as e:
             # Print all debug information

@@ -5,4 +5,5 @@ defaults:
   - server: default
 width: 800
 height: 600
-food_quantity: 100
+food_quantity: 50
+fps: 60

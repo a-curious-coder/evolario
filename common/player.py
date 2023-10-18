@@ -183,12 +183,11 @@ class PlayerManager:
         """
         while True:
             stop = True
-            x = random.randrange(0, self.cfg.server.w)
-            y = random.randrange(0, self.cfg.server.h)
-            for player in self.players.items():
-                p = self.players[player]
-                dis = math.sqrt((x - p["x"]) ** 2 + (y - p["y"]) ** 2)
-                if dis <= self.player_config.player_radius + p["score"]:
+            x = random.randrange(0, self.cfg.width)
+            y = random.randrange(0, self.cfg.height)
+            for player in self.players.values():
+                dis = math.sqrt((x - player.position.x) ** 2 + (y - player.position.y) ** 2)
+                if dis <= self.player_config.radius + player.score:
                     stop = False
                     break
             if stop:
