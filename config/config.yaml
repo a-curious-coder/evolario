@@ -6,4 +6,4 @@ defaults:
 width: 800
 height: 600
 food_quantity: 50
-fps: 60
+fps: 120

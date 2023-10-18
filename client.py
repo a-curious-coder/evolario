@@ -119,7 +119,7 @@ def main(cfg: DictConfig):
     W = cfg.width
     H = cfg.height
     # setup pygame window
-    SCREEN = pygame.display.set_mode((cfg.width, cfg.height), flags)
+    SCREEN = pygame.display.set_mode((cfg.width, cfg.height), flags, 16)
     player_name = "Human"
     player_manager = PlayerManager(cfg)
     food_manager = FoodCellManager(cfg, player_manager)
@@ -139,7 +139,7 @@ def main(cfg: DictConfig):
     while run:
         player = player_manager.get(_id)
         # limit the game to 30 frames per second
-        clock.tick(cfg.fps)
+        clock.tick_busy_loop(cfg.fps)
 
         # Calculate velocity based on score
         vel = max(START_VEL - round(player.score / 14), 1)
@@ -172,13 +172,13 @@ def main(cfg: DictConfig):
         # Draw game window
         # Set background colour
         SCREEN.fill((255, 255, 255))
-        # draw_grid()
+        draw_grid()
         food_manager.draw(SCREEN)
         player_manager.draw(SCREEN)
-        # draw_score(player.score)
-        # draw_scores(player_manager)
+        draw_score(player.score)
+        draw_scores(player_manager)
         fps = font.render(f"FPS: {clock.get_fps():.0f}", True, (0, 0, 0))
-        SCREEN.blit(fps, (10, 10))
+        fps = SCREEN.blit(fps, (10, 10))
         pygame.display.update()
 
     client.disconnect()
