@@ -114,7 +114,7 @@ class PlayerManager:
             y (int): The y-coordinate of the player.
             score (int): The score of the player.
         """
-        position = self._get_start_location()
+        position = self.get_start_location()
         self.players[player_id] = Player(self.cfg, player_id, name, position)
 
     def update(self, player_id, position, score, colour):
@@ -173,7 +173,7 @@ class PlayerManager:
             print(e)
             input("Press enter to continue...")
 
-    def _get_start_location(self):
+    def get_start_location(self):
         """
         picks a start location for a player based on other player
         locations. It will ensure it does not spawn inside another player
@@ -186,7 +186,9 @@ class PlayerManager:
             x = random.randrange(0, self.cfg.width)
             y = random.randrange(0, self.cfg.height)
             for player in self.players.values():
-                dis = math.sqrt((x - player.position.x) ** 2 + (y - player.position.y) ** 2)
+                dis = math.sqrt(
+                    (x - player.position.x) ** 2 + (y - player.position.y) ** 2
+                )
                 if dis <= self.player_config.radius + player.score:
                     stop = False
                     break

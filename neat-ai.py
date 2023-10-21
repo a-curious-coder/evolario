@@ -7,6 +7,7 @@ import concurrent.futures
 import contextlib
 import threading
 import time
+import traceback
 
 import neat
 
@@ -51,13 +52,19 @@ timer.start()
 
 
 def calculate_distance(x1, y1, x2, y2):
-    distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-    return distance
+    """
+    Calculates the distance between two points in 2D space
+
+    Parameters:
+        x1 (int): The x-coordinate of the first point.
+        y1 (int): The y-coordinate of the first point.
+        x2 (int): The x-coordinate of the second point.
+        y2 (int): The y-coordinate of the second point.
+    """
+    return math.hypot(x2 - x1, y2 - y1)
 
 
 def evaluate_genomes(genomes, config):
-    global should_restart
-    threads = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             executor.submit(evaluate_single_genome, genome_id, genome, config): (
@@ -66,6 +73,7 @@ def evaluate_genomes(genomes, config):
             )
             for genome_id, genome in genomes
         }
+
         for future in concurrent.futures.as_completed(futures):
             genome_id, genome = futures[future]
             try:
@@ -74,12 +82,17 @@ def evaluate_genomes(genomes, config):
                 print(
                     f"[INFO]\tAn error occurred while evaluating genome {genome_id}: {e}"
                 )
-    # Reset the flag for the next generation
-    should_restart = False
-    # Restart the timer for the next generation
-    timer = threading.Timer(GENERATION_TIMER, restart_generation)
-    timer.start()
     print("[INFO]\tGeneration complete")
+
+
+# def evaluate_genomes(genomes, config):
+#     for genome_id, genome in genomes:
+#         try:
+#             genome.fitness = evaluate_single_genome(genome_id, genome, config)
+#         except Exception as e:
+#             print(f"[INFO]\tAn error occurred while evaluating genome {genome_id}: {e}")
+#             traceback.print_exc()
+#     print("[INFO]\tGeneration complete")
 
 
 # Used to evaluate a single bot
@@ -93,45 +106,51 @@ def evaluate_single_genome(genome_id, genome, config):
     # start by connecting to the network
     client = Client()
     current_id = client.connect(name)
-    foods, players, game_time = client.send("get")
+    food_cells, players = client.send("get")
 
     # setup the clock, limit to 30fps
     clock = pygame.time.Clock()
     game_running = True
     movement_threshold = 4.9  # Change this value according to your game's scale
     total_distance_travelled = 0
-    last_position = (players[current_id]["x"], players[current_id]["y"])
+    last_position = (players[current_id].position.x, players[current_id].position.y)
     while game_running:
         distance_moved = 0
         last_move_time = time.time()
-        clock.tick(60)
+        clock.tick(20)
         # Define an area of 20 radius around the player
         local_vicinity = 100
         # Create a list called foods_data to contain the euclidean distances of the foods
-        foods_data = [
+        food_data = [
             calculate_distance(
-                players[current_id]["x"], players[current_id]["y"], food[0], food[1]
+                players[current_id].position.x,
+                players[current_id].position.y,
+                food_cell.position.x,
+                food_cell.position.y,
             )
-            for food in foods
+            for food_cell in food_cells
             if calculate_distance(
-                players[current_id]["x"], players[current_id]["y"], food[0], food[1]
+                players[current_id].position.x,
+                players[current_id].position.y,
+                food_cell.position.x,
+                food_cell.position.y,
             )
             < local_vicinity
         ]
 
         players_data = [
             calculate_distance(
-                players[player]["x"],
-                players[player]["y"],
-                players[current_id]["x"],
-                players[current_id]["y"],
+                players[player].position.x,
+                players[player].position.y,
+                players[current_id].position.x,
+                players[current_id].position.y,
             )
             for player in players
             if calculate_distance(
-                players[player]["x"],
-                players[player]["y"],
-                players[current_id]["x"],
-                players[current_id]["y"],
+                players[player].position.x,
+                players[player].position.y,
+                players[current_id].position.x,
+                players[current_id].position.y,
             )
             < local_vicinity
             and player != current_id
@@ -147,110 +166,115 @@ def evaluate_single_genome(genome_id, genome, config):
         for i in range(len(players_data)):
             players_data[i] = players_data[i] / local_vicinity
 
-        if len(foods_data) < NUM_FOODS:
-            foods_data += [0] * (NUM_FOODS - len(foods_data))
+        if len(food_data) < NUM_FOODS:
+            food_data += [0] * (NUM_FOODS - len(food_data))
         else:
-            foods_data = foods_data[:NUM_FOODS]
+            food_data = food_data[:NUM_FOODS]
 
-        for i in range(len(foods_data)):
-            foods_data[i] = foods_data[i] / local_vicinity
+        for i in range(len(food_data)):
+            food_data[i] = food_data[i] / local_vicinity
 
         # Create input data for the neural network
         input_data = (
-            players[current_id]["x"],
-            players[current_id]["y"],
-            *foods_data,
+            players[current_id].position.x,
+            players[current_id].position.y,
+            *food_data,
             *players_data,
         )
 
-        player = players[current_id]
-        vel = 5 - round(player["score"] / 14)
+        vel = 5 - round(players[current_id].score / 14)
         if vel <= 1:
             vel = 1
 
         output = net.activate(input_data)
 
-        player = get_next_move(output, player, vel)
+        players[current_id] = get_next_move(output, players[current_id], vel)
 
-        x, y = players[current_id]["x"], players[current_id]["y"]
+        x, y = players[current_id].position.x, players[current_id].position.y
         next_move = f"move {x} {y}"
         # send next_move to server and recieve back all players information
-        foods, players, game_time = client.send(next_move)
+        food_cells, players = client.send(next_move)
 
-        if (players[current_id]["x"], players[current_id]["y"]) != last_position:
+        if (
+            players[current_id].position.x,
+            players[current_id].position.y,
+        ) != last_position:
             distance_moved += calculate_distance(
-                players[current_id]["x"], players[current_id]["y"], *last_position
+                players[current_id].position.x,
+                players[current_id].position.y,
+                *last_position,
             )
 
             if distance_moved > movement_threshold:
                 total_distance_travelled += distance_moved
-                last_position = (players[current_id]["x"], players[current_id]["y"])
+                last_position = (
+                    players[current_id].position.x,
+                    players[current_id].position.y,
+                )
                 last_move_time = time.time()
         else:
             pass
 
         if time.time() - last_move_time >= 5 or should_restart:
-            print(
-                f"{name} : {total_distance_travelled} : {players[current_id]['score']}"
-            )
+            print(f"{name} : {total_distance_travelled} : {players[current_id].score}")
             # You can return a default fitness score or a penalty
-            return (players[current_id]["score"] / 100) + (
-                total_distance_travelled / 100
-            )
+            return (players[current_id].score / 100) + (total_distance_travelled / 100)
 
 
 def get_next_move(output, player, vel):
     # movement based on key presses
     if directions[output.index(max(output))] == "left":
-        if player["x"] - vel - PLAYER_RADIUS - player["score"] >= 0:
-            player["x"] = player["x"] - vel
+        if player.position.x - vel - PLAYER_RADIUS - player.score >= 0:
+            player.position.x = player.position.x - vel
 
     if directions[output.index(max(output))] == "right":
-        if player["x"] + vel + PLAYER_RADIUS + player["score"] <= W:
-            player["x"] = player["x"] + vel
+        if player.position.x + vel + PLAYER_RADIUS + player.score <= W:
+            player.position.x = player.position.x + vel
 
     if directions[output.index(max(output))] == "up":
-        if player["y"] - vel - PLAYER_RADIUS - player["score"] >= 0:
-            player["y"] = player["y"] - vel
+        if player.position.y - vel - PLAYER_RADIUS - player.score >= 0:
+            player.position.y = player.position.y - vel
 
     if directions[output.index(max(output))] == "down":
-        if player["y"] + vel + PLAYER_RADIUS + player["score"] <= H:
-            player["y"] = player["y"] + vel
+        if player.position.y + vel + PLAYER_RADIUS + player.score <= H:
+            player.position.y = player.position.y + vel
 
     if directions[output.index(max(output))] == "up-left":
         if (
-            player["x"] - vel - PLAYER_RADIUS - player["score"] >= 0
-            and player["y"] - vel - PLAYER_RADIUS - player["score"] >= 0
+            player.position.x - vel - PLAYER_RADIUS - player.score >= 0
+            and player.position.y - vel - PLAYER_RADIUS - player.score >= 0
         ):
-            player["x"] = player["x"] - vel
-            player["y"] = player["y"] - vel
+            player.position.x = player.position.x - vel
+            player.position.y = player.position.y - vel
 
     if directions[output.index(max(output))] == "up-right":
         if (
-            player["x"] + vel + PLAYER_RADIUS + player["score"] <= W
-            and player["y"] - vel - PLAYER_RADIUS - player["score"] >= 0
+            player.position.x + vel + PLAYER_RADIUS + player.score <= W
+            and player.position.y - vel - PLAYER_RADIUS - player.score >= 0
         ):
-            player["x"] = player["x"] + vel
-            player["y"] = player["y"] - vel
+            player.position.x = player.position.x + vel
+            player.position.y = player.position.y - vel
 
     if directions[output.index(max(output))] == "down-left":
         if (
-            player["x"] - vel - PLAYER_RADIUS - player["score"] >= 0
-            and player["y"] + vel + PLAYER_RADIUS + player["score"] <= H
+            player.position.x - vel - PLAYER_RADIUS - player.score >= 0
+            and player.position.y + vel + PLAYER_RADIUS + player.score <= H
         ):
-            player["x"] = player["x"] - vel
-            player["y"] = player["y"] + vel
+            player.position.x = player.position.x - vel
+            player.position.y = player.position.y + vel
 
     if directions[output.index(max(output))] == "down-right":
         if (
-            player["x"] + vel + PLAYER_RADIUS + player["score"] <= W
-            and player["y"] + vel + PLAYER_RADIUS + player["score"] <= H
+            player.position.x + vel + PLAYER_RADIUS + player.score <= W
+            and player.position.y + vel + PLAYER_RADIUS + player.score <= H
         ):
-            player["x"] = player["x"] + vel
-            player["y"] = player["y"] + vel
+            player.position.x = player.position.x + vel
+            player.position.y = player.position.y + vel
 
     if directions[output.index(max(output))] == "no movement":
         pass
+
+    return player
 
 
 # Set up the NEAT configuration

@@ -1,5 +1,6 @@
 import os
 import socket
+import traceback
 
 import _pickle as pickle
 
@@ -15,8 +16,8 @@ class Client:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print("[INFO]\tClient created")
         # Read IP from file
-        with open("ip.txt", "r") as f:
-            self.host = f.read()
+        with open("ip.txt") as ip_file:
+            self.host = ip_file.read()
         # self.client.settimeout(10.0)
         self.port = 5555
         self.addr = (self.host, self.port)
@@ -29,7 +30,7 @@ class Client:
         """
         self.sock.connect(self.addr)
         self.sock.send(str.encode(name))
-        val = self.sock.recv(1024)
+        val = self.sock.recv(200000)
         return int(val.decode())  # can be int because will be an int id
 
     def disconnect(self):
@@ -39,7 +40,7 @@ class Client:
         """
         self.sock.close()
 
-    def send(self, data, pick=False):
+    def send(self, data):
         """
         sends information to the server
 
@@ -48,17 +49,19 @@ class Client:
         :return: str
         """
         try:
-            if pick:
-                self.sock.send(pickle.dumps(data))
-            else:
-                self.sock.send(str.encode(data))
+            # Send request to server
+            self.sock.send(str.encode(data))
 
             # Receive data from server
-            reply = self.sock.recv(20000)
-            reply = pickle.loads(reply)
+            response = self.sock.recv(200000)
+
+            # Decode data from server
+            reply = pickle.loads(response)
         except Exception as e:
+            print(f"{'.':->50}")
             # Print all debug information
-            print(f"Exception: {e}")
-            print(f"data: {data}")
+            print(f"[INFO]\tRequest packet: '{data}'")
+            traceback.print_exc()
+            print(f"{'.':->50}")
 
         return reply

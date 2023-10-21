@@ -1,46 +1,33 @@
-import logging
 import math
-import os
-import random
 import socket
-import sys
 import threading
 import time
 from _thread import start_new_thread
 
 import _pickle as pickle
 import hydra
+import pygame
 from omegaconf import DictConfig
-from scipy.spatial import cKDTree
 
 from common.food import FoodCellManager
 from common.player import PlayerManager
-from common.utilities import random_position
+from common.utilities import Position, random_position
 
 
-class ServerConfig:
-    def __init__(self, cfg: DictConfig):
-        self.cfg = cfg
-        self.hostname = socket.gethostname()
-        self.ip = socket.gethostbyname(self.hostname)
-        self.port = self.cfg.server.port
-        self.buffer_size = self.cfg.server.buffer_size
-        self.round_time = self.cfg.server.round_time * 1000
-        self.w = self.cfg.server.w
-        self.h = self.cfg.server.h
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-
-class ServerLogic:
+class CollisionDetectionThread(threading.Thread):
     def __init__(
         self, cfg: DictConfig, p_manager: PlayerManager, f_manager: FoodCellManager
     ):
+        threading.Thread.__init__(self)
         self.cfg = cfg
         self.p_manager = p_manager
         self.f_manager = f_manager
-        self.start = False
-        self.start_time = 0
+
+    def run(self):
+        while True:
+            # Perform collision detection for this user
+            self.player_food_collision()
+            self.player_collisions()
 
     def player_food_collision(self):
         """
@@ -94,16 +81,88 @@ class ServerLogic:
                                     player2.score**2 + player1.score**2
                                 )  # adding areas instead of radii
                                 self.p_manager.players[player1_key].score = 0
-                                (
-                                    self.p_manager.players[player1_key].position.x,
-                                    self.p_manager.players[player1_key].position.y,
-                                ) = self.p_manager._get_start_location()
+                                self.p_manager.players[
+                                    player1_key
+                                ].position = self.p_manager.get_start_location()
                                 print(
                                     f"[GAME] "
                                     + self.p_manager.players[player2_key].name
                                     + " ATE "
                                     + self.p_manager.players[player1_key].name
                                 )
+        except Exception as e:
+            print(e)
+            input("player_player_collision...")
+
+    def get_game_elements(self):
+        return self.f_manager, self.p_manager
+
+
+class ServerConfig:
+    def __init__(self, cfg: DictConfig):
+        self.cfg = cfg
+        self.hostname = socket.gethostname()
+        self.ip = socket.gethostbyname(self.hostname)
+        self.port = self.cfg.server.port
+        self.buffer_size = self.cfg.server.buffer_size
+        self.round_time = self.cfg.server.round_time * 1000
+        self.w = self.cfg.server.w
+        self.h = self.cfg.server.h
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+class ServerLogic:
+    def __init__(
+        self, cfg: DictConfig, p_manager: PlayerManager, f_manager: FoodCellManager
+    ):
+        self.cfg = cfg
+        self.p_manager = p_manager
+        self.f_manager = f_manager
+        self.start = False
+        self.start_time = time.time()
+
+    def player_food_collision(self):
+        """
+        checks if any of the player have collided with any of the food
+
+        :param players: a dictonary of players
+        :param food: a list of food
+        :return: None
+        """
+        try:
+            for player in self.p_manager.players:
+                p = self.p_manager.players[player]
+                for i, cell in enumerate(self.f_manager.food_cells):
+                    x = p.position.x - cell.position.x
+                    y = p.position.y - cell.position.y
+                    dis = math.hypot(x, y)
+                    if dis <= self.cfg.player.radius + p.score:
+                        self.p_manager.players[player].score += 1
+                        self.f_manager.remove(i)
+        except Exception as e:
+            print(e)
+            input("player_food_collision...")
+
+    def player_collisions(self):
+        try:
+            players = self.p_manager.get_all()  # Returns a dict of all player objects
+
+            for player1_key, player1 in players.items():
+                for player2_key, player2 in players.items():
+                    if player1_key != player2_key:
+                        p1x, p1y = player1.position.x, player1.position.y
+                        p2x, p2y = player2.position.x, player2.position.y
+
+                        dis = math.hypot(p1x - p2x, p1y - p2y)
+                        if dis < player2.score - player1.score * 0.85:
+                            player2.score = math.sqrt(
+                                player2.score**2 + player1.score**2
+                            )
+                            player1.score = 0
+                            player1.position = self.p_manager.get_start_location()
+                            print(f"[GAME] {player2.name} ATE {player1.name}")
+
         except Exception as e:
             print(e)
             input("player_player_collision...")
@@ -148,6 +207,9 @@ class Server:
         self.game_time = "Starting Soon"
         self.start = False
         self.start_time = 0
+        self.collision_thread = CollisionDetectionThread(
+            self.cfg, self.p_manager, self.f_manager
+        )
 
     def bind_server(self):
         try:
@@ -179,13 +241,13 @@ class Server:
         # Keep looping to accept new connections
         while True:
             clientsocket, addr = self.server_config.socket.accept()
-            if addr[0] == self.server_config.hostname and not self.start:
+            if addr[0] == self.server_config.ip and not self.start:
                 self.start = True
                 self.start_time = time.time()
                 print("[INFO] Game Started")
 
             self.connections += 1
-            start_new_thread(self.threaded_client, args=(clientsocket, self._id))
+            start_new_thread(self.threaded_client, (clientsocket, self._id))
             # self.threaded_client(clientsocket, self._id)
             self._id += 1
 
@@ -199,79 +261,56 @@ class Server:
         :param _id: int
         :return: None
         """
-        player_id = _id
+        try:
+            player_id = _id
 
-        # Receive a name from the client
-        name = clientsocket.recv(16).decode("utf-8")
+            # Receive a name from the client
+            name = clientsocket.recv(16).decode("utf-8")
 
-        print(f"[INFO] {name}\tconnected")
+            print(f"[INFO] {name} connected")
 
-        # Setup properties for each new player
-        self.p_manager.add(player_id, name)
+            # Setup properties for each new player
+            self.p_manager.add(player_id, name)
 
-        # pickle data and send initial info to clients
-        clientsocket.send(str.encode(str(player_id)))
-        self.start = True
+            # pickle data and send initial info to clients
+            clientsocket.send(str.encode(str(player_id)))
+            self.start = True
 
-        # Create a separate thread for receiving data from the client
-        recv_thread = threading.Thread(
-            target=self.recv_data, args=(clientsocket, player_id)
-        )
-        recv_thread.start()
+            # Create a separate thread for receiving data from the client
+            recv_thread = threading.Thread(
+                target=self.receive_data, args=(clientsocket, player_id, name)
+            )
+            recv_thread.start()
+            while True:
+                if self.start:
+                    game_time = round(time.time() - self.start_time)
+                    # if the game time passes the round time the game will stop
+                    if game_time >= self.server_config.round_time:
+                        self.start = False
 
-        while True:
-            if self.start:
-                game_time = round(time.time() - self.start_time)
-                # if the game time passes the round time the game will stop
-                if game_time >= self.server_config.round_time:
-                    self.start = False
+                time.sleep(0.001)
 
-            # try:
-            #     # Receive data from client
-            #     data = clientsocket.recv(self.server_config.buffer_size)
+        except Exception as e:
+            print(f"[ERR]\t{e}")
 
-            #     if not data:
-            #         continue
+    # def update_game(self):
+    #     while True:
+    #         (self.f_manager, self.p_manager) = self.collision_thread.get_game_elements()
 
-            #     data = data.decode("utf-8")
+    def receive_data(self, clientsocket, player_id, name):
+        """
+        Receives data from the client and sends data to the client
 
-            #     if data.split(" ")[0] == "move":
-            #         self.p_manager.handle_move_command(data, player_id)
-
-            #         self.server_logic.player_food_collision()
-            #         self.server_logic.player_collisions()
-
-            #         # if the amount of food is less than 150 create more
-            #         if len(self.f_manager.food_cells) <= self.cfg.food_quantity:
-            #             self.server_logic.create_food(1)
-            #     elif data.split(" ")[0] == "get":
-            #         pass
-            #     data_to_send = (self.f_manager.food_cells, self.p_manager.players)
-            #     send_data = pickle.dumps(data_to_send)
-            #     clientsocket.send(send_data)
-
-            # except Exception as e:
-            #     print(f"[ERR]\t{e}")
-            #     break  # if an exception has been reached disconnect client
-
-            time.sleep(0.01)
-
-        # When user disconnects
-        print(f"[INFO] {name}\tdisconnected")
-
-        self.connections -= 1
-        # remove client information from players list
-        self.p_manager.remove(player_id)
-        clientsocket.close()  # close connection
-
-    def recv_data(self, clientsocket, player_id):
+        :param socket clientsocket: socket object
+        :param int player_id: id of the player
+        """
         while True:
             try:
                 # Receive data from client
                 data = clientsocket.recv(self.server_config.buffer_size)
 
                 if not data:
-                    continue
+                    break
 
                 data = data.decode("utf-8")
 
@@ -284,15 +323,21 @@ class Server:
                     # if the amount of food is less than 150 create more
                     if len(self.f_manager.food_cells) <= self.cfg.food_quantity:
                         self.server_logic.create_food(1)
-                elif data.split(" ")[0] == "get":
-                    pass
                 data_to_send = (self.f_manager.food_cells, self.p_manager.players)
                 send_data = pickle.dumps(data_to_send)
                 clientsocket.send(send_data)
 
             except Exception as e:
-                print(f"[ERR]\t{e}")
+                print(f"[ERR]\tDisconnected {e}")
                 break  # if an exception has been reached disconnect client
+        # When user disconnects
+        print(f"[INFO] {name}\tdisconnected")
+
+        self.connections -= 1
+        # remove client information from players list
+        self.p_manager.remove(player_id)
+        # Close the connection using a context manager
+        clientsocket.close()
 
 
 @hydra.main(version_base=None, config_path="config", config_name="config")

@@ -7,6 +7,7 @@ with contextlib.redirect_stdout(None):
     import pygame
 
 import os
+import traceback
 
 from client.client import Client
 from common.food import FoodCellManager
@@ -129,7 +130,7 @@ def main(cfg: DictConfig):
     response = client.send("get")
     try:
         food_manager.food_cells, player_manager.players = response
-        print("[INFO]\tConnected to server")
+        print("[INFO]\tClient-side connected to server")
     except Exception:
         print("Error: Unexpected response from client.send('get')")
     clock = pygame.time.Clock()

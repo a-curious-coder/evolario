@@ -96,10 +96,10 @@ class ServerLogic:
                         + self.p_manager.players[player1].score ** 2
                     )  # adding areas instead of radii
                     self.p_manager.players[player1].score = 0
-                    (
+                    new (
                         self.p_manager.players[player1].position.x,
                         self.p_manager.players[player1].position.y,
-                    ) = self.p_manager._get_start_location()
+                    ) = self.p_manager.get_start_location()
                     print(
                         f"[GAME] "
                         + self.p_manager.players[player2].name

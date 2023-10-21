@@ -1,5 +1,5 @@
-buffer_size: 32
-round_time: 6000
+buffer_size: 1024
+round_time: 60
 mass_loss_time: 0
 gridline_spacing: 40
 transparency: 50
