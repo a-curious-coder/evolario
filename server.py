@@ -6,96 +6,12 @@ from _thread import start_new_thread
 
 import _pickle as pickle
 import hydra
-import pygame
 from omegaconf import DictConfig
+from scipy.spatial import cKDTree
 
 from common.food import FoodCellManager
 from common.player import PlayerManager
-from common.utilities import Position, random_position
-
-
-class CollisionDetectionThread(threading.Thread):
-    def __init__(
-        self, cfg: DictConfig, p_manager: PlayerManager, f_manager: FoodCellManager
-    ):
-        threading.Thread.__init__(self)
-        self.cfg = cfg
-        self.p_manager = p_manager
-        self.f_manager = f_manager
-
-    def run(self):
-        while True:
-            # Perform collision detection for this user
-            self.player_food_collision()
-            self.player_collisions()
-
-    def player_food_collision(self):
-        """
-        checks if any of the player have collided with any of the food
-
-        :param players: a dictonary of players
-        :param food: a list of food
-        :return: None
-        """
-        try:
-            for player in self.p_manager.players:
-                p = self.p_manager.players[player]
-                for i, cell in enumerate(self.f_manager.food_cells):
-                    x = p.position.x - cell.position.x
-                    y = p.position.y - cell.position.y
-                    dis = math.sqrt(x**2 + y**2)
-                    if dis <= self.cfg.player.radius + p.score:
-                        self.p_manager.players[player].score += 1
-                        self.f_manager.remove(i)
-        except Exception as e:
-            print(e)
-            input("player_food_collision...")
-
-    def player_collisions(self):
-        """
-        checks for player collision and handles that collision
-
-        :param players: dict
-        :return: None
-        """
-        players = self.p_manager.get_all()  # Returns a dict of all player objects
-        try:
-            if len(players) > 1:
-                for player1_key in players:
-                    for player2_key in players:
-                        if (
-                            player1_key != player2_key
-                        ):  # Make sure we're not comparing a player to itself
-                            player1 = players[player1_key]
-                            player2 = players[player2_key]
-
-                            p1x = player1.position.x
-                            p1y = player1.position.y
-
-                            p2x = player2.position.x
-                            p2y = player2.position.y
-
-                            dis = math.sqrt((p1x - p2x) ** 2 + (p1y - p2y) ** 2)
-                            if dis < player2.score - player1.score * 0.85:
-                                self.p_manager.players[player2_key].score = math.sqrt(
-                                    player2.score**2 + player1.score**2
-                                )  # adding areas instead of radii
-                                self.p_manager.players[player1_key].score = 0
-                                self.p_manager.players[
-                                    player1_key
-                                ].position = self.p_manager.get_start_location()
-                                print(
-                                    f"[GAME] "
-                                    + self.p_manager.players[player2_key].name
-                                    + " ATE "
-                                    + self.p_manager.players[player1_key].name
-                                )
-        except Exception as e:
-            print(e)
-            input("player_player_collision...")
-
-    def get_game_elements(self):
-        return self.f_manager, self.p_manager
+from common.utilities import random_position
 
 
 class ServerConfig:
@@ -126,46 +42,84 @@ class ServerLogic:
         """
         checks if any of the player have collided with any of the food
 
-        :param players: a dictonary of players
+        :param players: a dictionary of players
         :param food: a list of food
         :return: None
         """
         try:
-            for player in self.p_manager.players:
-                p = self.p_manager.players[player]
-                for i, cell in enumerate(self.f_manager.food_cells):
-                    x = p.position.x - cell.position.x
-                    y = p.position.y - cell.position.y
-                    dis = math.hypot(x, y)
-                    if dis <= self.cfg.player.radius + p.score:
+            # Build a k-d tree of food cell positions and a dictionary for fast removal
+            food_positions = [cell.xy for cell in self.f_manager.food_cells]
+            food_tree = cKDTree(food_positions)
+            food_dict = {i: cell for i, cell in enumerate(self.f_manager.food_cells)}
+
+            for player, p in self.p_manager.players.items():
+                player_radius = self.cfg.player.radius + p.score
+                # Find food cells within player_radius of the player
+                indices = food_tree.query_ball_point(
+                    (p.position.x, p.position.y), player_radius
+                )
+                for index in indices:
+                    cell = food_dict.pop(
+                        index, None
+                    )  # Remove the food cell from the dictionary
+                    if cell is not None:
                         self.p_manager.players[player].score += 1
-                        self.f_manager.remove(i)
+                        # Remove the food cell from the original list as well
+                        self.f_manager.food_cells.remove(cell)
+
         except Exception as e:
             print(e)
-            input("player_food_collision...")
 
     def player_collisions(self):
+        """
+        checks if any of the players have collided with each other
+
+        :param players: a dictionary of players
+        :return: None
+        """
         try:
-            players = self.p_manager.get_all()  # Returns a dict of all player objects
+            # Build a k-d tree of player positions and a dictionary for fast removal
+            player_positions = [
+                p.position.get() for p in self.p_manager.players.values()
+            ]
+            player_tree = cKDTree(player_positions)
+            player_dict = {
+                player_id: player
+                for player_id, player in self.p_manager.players.items()
+            }
 
-            for player1_key, player1 in players.items():
-                for player2_key, player2 in players.items():
-                    if player1_key != player2_key:
-                        p1x, p1y = player1.position.x, player1.position.y
-                        p2x, p2y = player2.position.x, player2.position.y
-
-                        dis = math.hypot(p1x - p2x, p1y - p2y)
-                        if dis < player2.score - player1.score * 0.85:
-                            player2.score = math.sqrt(
-                                player2.score**2 + player1.score**2
-                            )
-                            player1.score = 0
-                            player1.position = self.p_manager.get_start_location()
-                            print(f"[GAME] {player2.name} ATE {player1.name}")
+            for player_id, player in self.p_manager.players.items():
+                player_radius = player.get_radius()
+                # Find players within player_radius of the current player
+                indices = player_tree.query_ball_point(
+                    (player.position.x, player.position.y), player_radius
+                )
+                for other_player_id in indices:
+                    if other_player_id != player_id:
+                        other_player = player_dict.get(other_player_id)
+                        if other_player:
+                            # Handle the collision between players here
+                            self.handle_player_collision(player_id, other_player_id)
+                            break
 
         except Exception as e:
             print(e)
-            input("player_player_collision...")
+
+    def handle_player_collision(self, player1_id, player2_id):
+        """Handles the collision between two players
+
+        :param player1: The first player
+        :param player2: The second player
+        """
+        self.p_manager.players[player1_id].score += (
+            self.p_manager.players[player2_id].score // 2
+        )
+        # Deal with player 2
+        self.p_manager.players[player2_id].eaten = True
+        self.p_manager.players[player2_id].score = 0
+        print(
+            f"[GAME] {self.p_manager.players[player1_id].score.name} ATE {self.p_manager.players[player2_id].score.name}"
+        )
 
     def create_food(self, n):
         """
@@ -178,13 +132,13 @@ class ServerLogic:
             for _ in range(n):
                 while True:
                     stop = True
-                    position = random_position(self.cfg.server.w, self.cfg.server.h)
+                    position = random_position(self.cfg.width, self.cfg.height)
                     for player in self.p_manager.players.values():
-                        dis = math.sqrt(
-                            (position.x - player.position.x) ** 2
-                            + (position.y - player.position.y) ** 2
+                        dis = math.hypot(
+                            position.x - player.position.x,
+                            position.y - player.position.y,
                         )
-                        if dis <= self.cfg.player.radius + player.score:
+                        if dis <= player.get_radius():
                             stop = False
                     if stop:
                         break
@@ -207,9 +161,6 @@ class Server:
         self.game_time = "Starting Soon"
         self.start = False
         self.start_time = 0
-        self.collision_thread = CollisionDetectionThread(
-            self.cfg, self.p_manager, self.f_manager
-        )
 
     def bind_server(self):
         try:
@@ -253,6 +204,17 @@ class Server:
 
         print("[SERVER] Server offline")
 
+    def restart_game(self):
+        self.p_manager = PlayerManager(self.cfg)
+        self.f_manager = FoodCellManager(self.cfg, self.p_manager)
+        self.server_logic = ServerLogic(self.cfg, self.p_manager, self.f_manager)
+        self.connections = 0
+        self._id = 0
+        self.game_time = "Starting Soon"
+        self.start = False
+        self.start_time = 0
+        self.server_logic.create_food(self.cfg.food_quantity)
+
     def threaded_client(self, clientsocket, _id):
         """
         Runs in a new thread for each player connected to the server
@@ -268,13 +230,13 @@ class Server:
             name = clientsocket.recv(16).decode("utf-8")
 
             print(f"[INFO] {name} connected")
+            if name != "controller" and name != "spectator":
+                # Setup properties for each new player
+                self.p_manager.add(player_id, name)
 
-            # Setup properties for each new player
-            self.p_manager.add(player_id, name)
-
-            # pickle data and send initial info to clients
-            clientsocket.send(str.encode(str(player_id)))
-            self.start = True
+                # pickle data and send initial info to clients
+                clientsocket.send(str.encode(str(player_id)))
+                self.start = True
 
             # Create a separate thread for receiving data from the client
             recv_thread = threading.Thread(
@@ -313,7 +275,8 @@ class Server:
                     break
 
                 data = data.decode("utf-8")
-
+                if data.split(" ")[0] == "restart":
+                    self.restart_game()
                 if data.split(" ")[0] == "move":
                     self.p_manager.handle_move_command(data, player_id)
 

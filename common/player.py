@@ -34,6 +34,7 @@ class Player:
         self.colour = random_rgb()
         self.vel = self.player_config.start_velocity
         self.radius = self.player_config.radius
+        self.eaten = False
 
     def draw(self, screen):
         """Draws the player on the game screen with a circle representing the player and their name.
@@ -45,7 +46,7 @@ class Player:
             screen,
             self.colour,
             (self.position.x, self.position.y),
-            self.player_config.radius + round(self.score),
+            self.radius + round(self.score),
         )
 
     def move(self):
@@ -87,6 +88,10 @@ class Player:
     def get_y(self):
         """Fetches the y-coordinate of the player."""
         return self.position.y
+
+    def get_radius(self):
+        """Fetches the radius of the player."""
+        return self.radius + self.score
 
 
 class PlayerManager:
@@ -161,6 +166,15 @@ class PlayerManager:
             dict: A dictionary of all player instances.
         """
         return self.players
+
+    def get_top_score(self):
+        """
+        Fetches the top score of all players.
+
+        Returns:
+            int: The top score of all players.
+        """
+        return max(player.score for player in self.players.values())
 
     def handle_move_command(self, data, player_id):
         try:

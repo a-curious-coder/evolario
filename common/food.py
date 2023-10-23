@@ -22,6 +22,7 @@ class FoodCell:
         """
         self.radius = cfg.food_radius
         self.position = position
+        self.xy = (self.position.x, self.position.y)
         self.colour = random_rgb()
 
     def draw(self, screen):

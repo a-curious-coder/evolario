@@ -53,7 +53,7 @@ def convert_time(t):
     return str(minutes) + ":" + str(seconds)
 
 
-def draw_score(score):
+def draw_score(SCREEN, score):
     """
     draws each frame
     :return: None
@@ -64,7 +64,7 @@ def draw_score(score):
     SCREEN.blit(text, (10, 15 + text.get_height()))
 
 
-def draw_scores(player_manager):
+def draw_scores(SCREEN, cfg, player_manager):
     players = player_manager.get_all()
 
     # Sort players by score in descending order
@@ -74,7 +74,7 @@ def draw_scores(player_manager):
 
     # Define the title text
     title_text = TIME_FONT.render("Scoreboard", 1, (0, 0, 0))
-    title_x = W - title_text.get_width() - 10
+    title_x = cfg.width - title_text.get_width() - 10
     SCREEN.blit(title_text, (title_x, 5))
 
     # Determine how many players to display (up to 3)
@@ -91,16 +91,18 @@ def draw_scores(player_manager):
         SCREEN.blit(score_text, (text_x, text_y))
 
 
-def draw_grid():
-    for i in range(0, H, GRIDLINE_SPACING):
-        horizontal_line = pygame.Surface((W, GRIDLINE_THICKNESS), pygame.SRCALPHA)
+def draw_grid(SCREEN, cfg):
+    for i in range(0, cfg.height, GRIDLINE_SPACING):
+        horizontal_line = pygame.Surface((cfg.width, GRIDLINE_THICKNESS), pygame.SRCALPHA)
         horizontal_line.fill(
             (184, 184, 184, TRANSPARENCY)
         )  # You can change the 100 depending on what transparency it is.
         SCREEN.blit(horizontal_line, (0, i - 1))
 
-    for i in range(0, W, GRIDLINE_SPACING):
-        vertical_line = pygame.Surface((GRIDLINE_THICKNESS, H), pygame.SRCALPHA)
+    for i in range(0, cfg.width, GRIDLINE_SPACING):
+        vertical_line = pygame.Surface(
+            (GRIDLINE_THICKNESS, cfg.height), pygame.SRCALPHA
+        )
         vertical_line.fill(
             (184, 184, 184, TRANSPARENCY)
         )  # You can change the 100 depending on what transparency it is.
@@ -173,11 +175,11 @@ def main(cfg: DictConfig):
         # Draw game window
         # Set background colour
         SCREEN.fill((255, 255, 255))
-        draw_grid()
+        draw_grid(SCREEN, cfg)
         food_manager.draw(SCREEN)
         player_manager.draw(SCREEN)
-        draw_score(player.score)
-        draw_scores(player_manager)
+        draw_score(SCREEN, player.score)
+        draw_scores(SCREEN, player_manager)
         fps = font.render(f"FPS: {clock.get_fps():.0f}", True, (0, 0, 0))
         fps = SCREEN.blit(fps, (10, 10))
         pygame.display.update()
