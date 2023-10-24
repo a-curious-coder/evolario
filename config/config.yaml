@@ -6,5 +6,5 @@ defaults:
 width: 800
 height: 600
 food_quantity: 200
-fps: 40
+fps: 1200
 neat_ai_config_file: config-feedforward.txt

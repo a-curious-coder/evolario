@@ -48,20 +48,38 @@ class Client:
         :param pick: boolean if should pickle or not
         :return: str
         """
-        try:
-            # Send request to server
-            self.sock.send(str.encode(data))
+        # Send request to server
+        self.sock.send(str.encode(data))
 
+        full_response = self.sock.recv(200000)
+        print(f"[INFO]\tFull response size: {len(full_response)}")
+        reply = pickle.loads(full_response)
+
+        return reply
+
+    def send2(self, data):
+        """
+        sends information to the server
+
+        :param data: str
+        :param pick: boolean if should pickle or not
+        :return: str
+        """
+        # Send request to server
+        self.sock.send(str.encode(data))
+        full_response = b""
+        while True:
             # Receive data from server
             response = self.sock.recv(200000)
+            # Append the response to the full_response
+            full_response += response
+            # Print full response size
+            print(f"[INFO]\tFull response size: {len(full_response)}")
+            # If response is empty, break the loop
+            if len(response) == 0:
+                break
 
-            # Decode data from server
-            reply = pickle.loads(response)
-        except Exception as e:
-            print(f"{'.':->50}")
-            # Print all debug information
-            print(f"[INFO]\tRequest packet: '{data}'")
-            traceback.print_exc()
-            print(f"{'.':->50}")
+        # Decode data from server
+        reply = pickle.loads(full_response)
 
         return reply

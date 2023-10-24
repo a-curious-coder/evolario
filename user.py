@@ -179,10 +179,10 @@ def main(cfg: DictConfig):
         food_manager.draw(SCREEN)
         player_manager.draw(SCREEN)
         draw_score(SCREEN, player.score)
-        draw_scores(SCREEN, player_manager)
+        draw_scores(SCREEN, cfg, player_manager)
         fps = font.render(f"FPS: {clock.get_fps():.0f}", True, (0, 0, 0))
         fps = SCREEN.blit(fps, (10, 10))
-        pygame.display.update()
+        pygame.display.flip()
 
     client.disconnect()
     pygame.quit()

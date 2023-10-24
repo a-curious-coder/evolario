@@ -306,12 +306,7 @@ def preview_game(cfg: DictConfig):
 
     client = Client()
     _ = client.connect(player_name)
-    response = client.send("get")
-    try:
-        food_manager.food_cells, player_manager.players = response
-        print("[INFO]\tClient-side connected to server")
-    except Exception:
-        print("Error: Unexpected response from client.send('get')")
+
     clock = pygame.time.Clock()
     # Get current player
     font = pygame.font.Font(None, 36)
@@ -322,6 +317,11 @@ def preview_game(cfg: DictConfig):
 
         # Get current information from server
         response = client.send("get")
+        try:
+            food_manager.food_cells, player_manager.players = response
+            print("[INFO]\tClient-side connected to server")
+        except Exception:
+            print("Error: Unexpected response from client.send('get')")
         food_manager.food_cells, player_manager.players = response
 
         for event in pygame.event.get():
@@ -354,8 +354,9 @@ def preview_game(cfg: DictConfig):
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
     # Run preview game in a separate thread
-    with contextlib.suppress(Exception):
-        threading.Thread(target=preview_game, args=(cfg,)).start()
+    preview_game(cfg)
+    # with contextlib.suppress(Exception):
+    #     threading.Thread(target=preview_game, args=(cfg,)).start()
     # neat_ai = NeatAI(cfg)
     # neat_ai.run()
 

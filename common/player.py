@@ -46,7 +46,7 @@ class Player:
             screen,
             self.colour,
             (self.position.x, self.position.y),
-            self.radius + round(self.score),
+            self.get_radius(),
         )
 
     def move(self):
@@ -174,6 +174,8 @@ class PlayerManager:
         Returns:
             int: The top score of all players.
         """
+        if not self.players:
+            return 0
         return max(player.score for player in self.players.values())
 
     def handle_move_command(self, data, player_id):

@@ -1,73 +1,45 @@
 [NEAT]
-fitness_criterion     = max
-fitness_threshold     = 100
-pop_size              = 25
-reset_on_extinction   = False
+# Population parameters
+pop_size = 100
 
-[DefaultGenome]
-# node activation options
-activation_default      = sigmoid
-activation_mutate_rate  = 0.1
-activation_options      = sigmoid
+# Mutation rates
+mutate_prob = 0.2
+mutate_power = 0.5
 
-# node aggregation options
-aggregation_default     = sum
-aggregation_mutate_rate = 0.0
-aggregation_options     = sum
+# Crossover settings
+crossover_prob = 0.7
 
-# node bias options
-bias_init_mean          = 0.0
-bias_init_stdev         = 1.0
-bias_max_value          = 30.0
-bias_min_value          = -30.0
-bias_mutate_power       = 0.5
-bias_mutate_rate        = 0.7
-bias_replace_rate       = 0.1
-compatibility_disjoint_coefficient = 1.0
-compatibility_weight_coefficient = 0.5
-
-# connection add/remove rates
-conn_add_prob           = 0.5
-conn_delete_prob        = 0.5
-
-# connection enable options
-enabled_default         = True
-enabled_mutate_rate     = 0.01
-
-feed_forward            = True
-initial_connection      = full
-
-# node add/remove rates
-node_add_prob           = 0.2
-node_delete_prob        = 0.2
-
-# network parameters
-num_hidden              = 0
-num_inputs              = 22
-num_outputs             = 9
-response_init_mean     = 1.0
-response_init_stdev    = 0.1
-response_max_value     = 30.0
-response_min_value     = -30.0
-response_mutate_power  = 0.1
-response_mutate_rate   = 0.1
-response_replace_rate  = 0.1
-weight_init_mean       = 0.1
-weight_init_stdev      = 1.0
-weight_max_value       = 30
-weight_min_value       = -30
-weight_mutate_power    = 0.5
-weight_mutate_rate     = 0.8
-weight_replace_rate    = 0.1
-
-[DefaultSpeciesSet]
+# Parameters for complexification
 compatibility_threshold = 3.0
+compatibility_change = 0.1
 
-[DefaultStagnation]
-species_fitness_func = max
-max_stagnation       = 20
-species_elitism      = 2
+# Number of generations
+n_generations = 100
 
-[DefaultReproduction]
-elitism            = 2
+# Network parameters
+num_hidden = 10
+num_inputs = 8  # Adjust this based on your game state
+num_outputs = 4  # Adjust this based on your game actions
+
+# Node activation function
+activation_function = sigmoid
+
+# Complexity penalty
+complexity_penalty = 0.001
+
+# Weight mutation settings
+weight_mutate_prob = 0.8
+weight_perturb_prob = 0.9
+weight_perturb_power = 0.1
+
+# Node mutation settings
+node_mutate_prob = 0.03
+node_activation = sigmoid
+bias_mutate_power = 0.5
+
+# Crossover settings
+crossover_rate = 0.7
+interspecies_crossover_rate = 0.001
+
+# Survivor selection
 survival_threshold = 0.2
